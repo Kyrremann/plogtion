@@ -1,7 +1,8 @@
 use axum::{
+    Router,
+    extract::DefaultBodyLimit,
     response::Html,
     routing::{get, post},
-    Router,
 };
 use plogtion::upload;
 
@@ -9,7 +10,10 @@ use plogtion::upload;
 async fn main() {
     let app = Router::new()
         .route("/", get(show_index))
-        .route("/post", post(upload));
+        .route("/post", post(upload))
+        .layer(DefaultBodyLimit::max(
+            1024 * 1024 * 10, // 10 MB
+        ));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
     axum::serve(listener, app).await.unwrap();
