@@ -50,7 +50,7 @@ pub async fn post_campaign(
         tag: "plog".to_string(),
         name: subject.to_string(),
         subject: subject.to_string(),
-        params: params,
+        params,
         scheduled_at: scheduled_at.to_rfc3339(),
         sender: Sender { id: 2 },
         recipients: Recipients { list_ids: vec![2] },
