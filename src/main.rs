@@ -12,7 +12,7 @@ async fn main() {
         .route("/", get(show_index))
         .route("/post", post(upload))
         .layer(DefaultBodyLimit::max(
-            1024 * 1024 * 10, // 10 MB
+            1024 * 1024 * 100, // 100 MB
         ));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();

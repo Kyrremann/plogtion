@@ -32,7 +32,7 @@ struct BrevoResponse {
 }
 
 pub async fn post_campaign(
-    subject: String,
+    title: String,
     description: String,
     image_url: String,
     post_url: String,
@@ -41,15 +41,15 @@ pub async fn post_campaign(
 
     let scheduled_at = chrono::Utc::now() + chrono::Duration::hours(1);
     let mut params = std::collections::HashMap::new();
-    params.insert("TITLE".to_string(), subject.to_string());
-    params.insert("DESCRIPTION".to_string(), description.to_string());
-    params.insert("IMAGE_URL".to_string(), image_url.to_string());
-    params.insert("POST_URL".to_string(), post_url.to_string());
+    params.insert("TITLE".to_string(), title.clone());
+    params.insert("DESCRIPTION".to_string(), description.clone());
+    params.insert("IMAGE_URL".to_string(), image_url.clone());
+    params.insert("POST_URL".to_string(), post_url.clone());
 
     let campaign = EmailCampaign {
         tag: "plog".to_string(),
-        name: subject.to_string(),
-        subject: subject.to_string(),
+        name: title.clone(),
+        subject: title.clone(),
         params,
         scheduled_at: scheduled_at.to_rfc3339(),
         sender: Sender { id: 2 },
@@ -65,6 +65,7 @@ pub async fn post_campaign(
         .json(&serde_json::json!(&campaign))
         .send()
         .await;
+
     match response {
         Ok(resp) => {
             if resp.status().is_success() {
@@ -79,11 +80,10 @@ pub async fn post_campaign(
                     "Failed to post campaign: {}: {}:{}",
                     status, error.message, error.code
                 );
-                println!("JSON: {}", serde_json::to_string_pretty(&campaign).unwrap());
             }
         }
-        Err(e) => {
-            println!("Error occurred: {}", e);
+        Err(err) => {
+            println!("Request failed: {}", err);
         }
     }
 }
