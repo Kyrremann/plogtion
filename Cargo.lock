@@ -2433,6 +2433,7 @@ dependencies = [
  "chrono",
  "image",
  "lazy_static",
+ "log",
  "reqwest",
  "rust-s3",
  "serde",

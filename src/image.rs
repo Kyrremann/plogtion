@@ -1,8 +1,13 @@
 use image::codecs::jpeg::JpegEncoder;
+use image::imageops::FilterType;
 use image::{GenericImageView, ImageReader};
+use log::info;
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use std::io::{BufWriter, Cursor};
+
+const MAX_DIMENSION: u32 = 1440;
+const JPEG_QUALITY: u8 = 75;
 
 pub(crate) async fn upload_image(
     path: &str,
@@ -33,43 +38,43 @@ pub(crate) async fn upload_image(
 pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWriter<Vec<u8>> {
     let src_image = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .unwrap()
+        .expect("Failed to guess image format")
         .decode()
-        .unwrap();
+        .expect("Failed to decode image");
 
-    // Resize logic
     let (src_width, src_height) = src_image.dimensions();
-    if src_width <= 1440 && src_height <= 1440 {
-        println!(
-            "Image {} is already smaller than 1440 pixels on the longest side, skipping resize.",
-            file_name
+    if src_width <= MAX_DIMENSION && src_height <= MAX_DIMENSION {
+        info!(
+            "Image {} is already smaller than {} pixels on the longest side, skipping resize.",
+            file_name, MAX_DIMENSION
         );
         return BufWriter::new(bytes.to_vec());
     }
 
     let scale_factor = if src_width > src_height {
-        1440.0 / src_width as f32
+        MAX_DIMENSION as f32 / src_width as f32
     } else {
-        1440.0 / src_height as f32
+        MAX_DIMENSION as f32 / src_height as f32
     };
 
     let dst_width = (src_width as f32 * scale_factor) as u32;
     let dst_height = (src_height as f32 * scale_factor) as u32;
-    println!(
+    info!(
         "Resizing image {} from {}x{} to {}x{}",
         file_name, src_width, src_height, dst_width, dst_height
     );
 
-    let mut final_image =
-        src_image.resize(dst_width, dst_height, image::imageops::FilterType::Lanczos3);
+    let mut final_image = src_image.resize(dst_width, dst_height, FilterType::Lanczos3);
 
     if src_width > src_height {
         final_image = final_image.rotate90();
     }
 
     let mut buf = BufWriter::new(Vec::new());
-    let encoder = JpegEncoder::new_with_quality(&mut buf, 75);
-    final_image.write_with_encoder(encoder).unwrap();
+    let encoder = JpegEncoder::new_with_quality(&mut buf, JPEG_QUALITY);
+    final_image
+        .write_with_encoder(encoder)
+        .expect("Failed to encode image");
 
     buf
 }
