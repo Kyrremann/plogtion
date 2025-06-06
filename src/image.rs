@@ -37,19 +37,6 @@ pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWri
         .decode()
         .unwrap();
 
-    // // Correct orientation based on EXIF metadata
-    // if let Ok(exif_reader) = exif::Reader::new().read_from_container(&mut Cursor::new(bytes)) {
-    //     if let Some(orientation) = exif_reader.get_field(exif::Tag::Orientation, exif::In::PRIMARY)
-    //     {
-    //         src_image = match orientation.value.get_uint(0) {
-    //             Some(3) => src_image.rotate180(),
-    //             Some(6) => src_image.rotate90(),
-    //             Some(8) => src_image.rotate270(),
-    //             _ => src_image, // No rotation needed
-    //         };
-    //     }
-    // }
-
     // Resize logic
     let (src_width, src_height) = src_image.dimensions();
     if src_width <= 1440 && src_height <= 1440 {
@@ -73,12 +60,50 @@ pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWri
         file_name, src_width, src_height, dst_width, dst_height
     );
 
-    let final_image =
+    let mut final_image =
         src_image.resize(dst_width, dst_height, image::imageops::FilterType::Lanczos3);
+
+    if src_width > src_height {
+        final_image = final_image.rotate90();
+    }
 
     let mut buf = BufWriter::new(Vec::new());
     let encoder = JpegEncoder::new_with_quality(&mut buf, 75);
     final_image.write_with_encoder(encoder).unwrap();
 
     buf
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use std::path::Path;
+
+    #[tokio::test]
+    async fn test_resize_with_quality() {
+        // Load the image from disk
+        let input_path = "testdata/20250529_104556.jpg";
+        let output_path = "testdata/resized_output.jpg";
+        let mut file = File::open(input_path).expect("Failed to open input image");
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)
+            .expect("Failed to read input image");
+
+        // Call the resize_with_quality function
+        let resized_image = resize_with_quality("20250529_124118.jpg", &buffer).await;
+
+        // Save the resized image to disk
+        let mut output_file = File::create(output_path).expect("Failed to create output image");
+        output_file
+            .write_all(&resized_image.into_inner().unwrap())
+            .expect("Failed to write resized image to disk");
+
+        // Assert the output file exists
+        assert!(
+            Path::new(output_path).exists(),
+            "Output file was not created"
+        );
+    }
 }
