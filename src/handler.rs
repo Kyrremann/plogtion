@@ -126,7 +126,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         form.images.len(),
     );
 
-    let post_file_name = tera::create_post(&form);
+    let post_file_name = tera::create_post(&form).unwrap();
     let date = NaiveDate::parse_from_str(&form.date, "%Y-%m-%d").unwrap();
 
     println!(
