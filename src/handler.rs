@@ -107,7 +107,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             } else {
                 form.images.insert(
                     file_name.clone(),
-                    tera::ImageMetadata {
+                    ImageMetadata {
                         image: format!("{DEFAULT_IMAGE_URL}/{path}"),
                         ..Default::default()
                     },

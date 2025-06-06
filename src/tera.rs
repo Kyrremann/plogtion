@@ -5,7 +5,7 @@ use std::io::Write;
 use tera::Tera;
 
 #[derive(Default, Serialize, Deserialize)]
-pub(crate) struct ImageMetadata {
+pub struct ImageMetadata {
     pub location: String,
     pub description: String,
     pub alt_text: String,
@@ -13,7 +13,7 @@ pub(crate) struct ImageMetadata {
 }
 
 #[derive(Deserialize, Serialize, Default)]
-pub(crate) struct UploadForm {
+pub struct UploadForm {
     pub title: String,
     pub categories: String,
     pub description: String,
@@ -22,7 +22,7 @@ pub(crate) struct UploadForm {
     pub images: HashMap<String, ImageMetadata>,
 }
 
-pub(crate) fn create_post(upload_form: &UploadForm) -> String {
+pub fn create_post(upload_form: &UploadForm) -> String {
     let tera = Tera::new("templates/**/*").expect("Failed to initialize Tera templates");
     let mut context = tera::Context::new();
     context.insert("form", upload_form);
