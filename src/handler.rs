@@ -134,13 +134,10 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
     let date = NaiveDate::parse_from_str(&form.date, "%Y-%m-%d").unwrap();
 
     println!(
-        "Post URL: {}",
-        format!(
-            "https://kyrremann.no/plog/post/{}/{}/{}",
-            date.year(),
-            date.month(),
-            post_file_name
-        )
+        "Post URL: https://kyrremann.no/plog/post/{}/{}/{}",
+        date.year(),
+        date.month(),
+        post_file_name
     );
 
     // brevo::post_campaign(
