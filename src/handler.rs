@@ -1,5 +1,7 @@
 mod brevo;
+mod tera;
 
+use crate::tera::{ImageMetadata, UploadForm};
 use axum::extract::Multipart;
 use axum::response::Html;
 use chrono::{Datelike, NaiveDate};
@@ -7,31 +9,10 @@ use image::codecs::jpeg::JpegEncoder;
 use image::{GenericImageView, ImageReader};
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
-use tera::Tera;
 
 const DEFAULT_IMAGE_URL: &str = "https://kyrremann-plog.s3.nl-ams.scw.cloud";
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct ImageMetadata {
-    location: String,
-    description: String,
-    alt_text: String,
-    image: String,
-}
-
-#[derive(Deserialize, Serialize, Default)]
-pub struct UploadForm {
-    title: String,
-    categories: String,
-    description: String,
-    date: String,
-    main_image: String,
-    images: HashMap<String, ImageMetadata>,
-}
 
 pub async fn upload(mut multipart: Multipart) -> Html<String> {
     let mut form = UploadForm {
@@ -130,7 +111,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             } else {
                 form.images.insert(
                     file_name.clone(),
-                    ImageMetadata {
+                    tera::ImageMetadata {
                         image: format!("{DEFAULT_IMAGE_URL}/{path}"),
                         ..Default::default()
                     },
@@ -149,7 +130,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         form.images.len(),
     );
 
-    let post_file_name = tera(&form);
+    let post_file_name = tera::create_post(&form);
     let date = NaiveDate::parse_from_str(&form.date, "%Y-%m-%d").unwrap();
 
     println!(
@@ -176,28 +157,6 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
     // .await;
 
     Html("Form and multipart data processed successfully!".to_string())
-}
-
-fn tera(upload_form: &UploadForm) -> String {
-    let tera = Tera::new("templates/**/*").expect("Failed to initialize Tera templates");
-    let mut context = tera::Context::new();
-    context.insert("form", upload_form);
-    let rendered = tera
-        .render("post.md", &context)
-        .expect("Failed to render template");
-
-    let file_name_safe_title = upload_form
-        .title
-        .replace(|c: char| !c.is_alphanumeric(), "-")
-        .to_lowercase()
-        .replace("--", "-");
-    let file_name = format!("_posts/{}-{}.md", upload_form.date, file_name_safe_title);
-
-    let mut file = File::create(file_name).expect("Failed to create output file");
-    file.write_all(rendered.as_bytes())
-        .expect("Failed to write rendered content to file");
-
-    file_name_safe_title
 }
 
 async fn upload_image(path: &str, content_type: &str, resized_image: BufWriter<Vec<u8>>) {
@@ -228,6 +187,19 @@ async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWriter<Vec<u8>
         .unwrap()
         .decode()
         .unwrap();
+
+    // // Correct orientation based on EXIF metadata
+    // if let Ok(exif_reader) = exif::Reader::new().read_from_container(&mut Cursor::new(bytes)) {
+    //     if let Some(orientation) = exif_reader.get_field(exif::Tag::Orientation, exif::In::PRIMARY)
+    //     {
+    //         src_image = match orientation.value.get_uint(0) {
+    //             Some(3) => src_image.rotate180(),
+    //             Some(6) => src_image.rotate90(),
+    //             Some(8) => src_image.rotate270(),
+    //             _ => src_image, // No rotation needed
+    //         };
+    //     }
+    // }
 
     // Resize logic
     let (src_width, src_height) = src_image.dimensions();
