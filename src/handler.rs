@@ -6,6 +6,7 @@ use crate::tera::{ImageMetadata, UploadForm};
 use axum::extract::Multipart;
 use axum::response::Html;
 use chrono::{Datelike, NaiveDate};
+use log::{error, info};
 use std::{fs::File, io::Write};
 
 const DEFAULT_IMAGE_URL: &str = "https://kyrremann-plog.s3.nl-ams.scw.cloud";
@@ -86,7 +87,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 data.len()
             );
 
-            let resized_image = image::resize_with_quality(&file_name, &data).await;
+            let resized_image = image::resize_with_quality(&file_name, &data).await.unwrap();
 
             let date_from_name = file_name.split("_").next().unwrap();
             let date_only = NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap();
@@ -101,7 +102,11 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 form.main_image = format!("{DEFAULT_IMAGE_URL}/{path}");
             }
 
-            image::upload_image(&path, &content_type, resized_image).await;
+            if let Err(err) = image::upload_image(&path, &content_type, resized_image).await {
+                error!("Failed to upload image {}: {}", path, err);
+                return Html("Image upload failed".to_string());
+            }
+
             if let Some(metadata) = form.images.get_mut(&file_name) {
                 metadata.image = path.clone();
             } else {
@@ -116,7 +121,7 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         }
     }
 
-    println!(
+    info!(
         "Title: {}, Categories: {}, Description: {}, Date: {}, Main: {}, Images: {}",
         form.title,
         form.categories,
@@ -126,28 +131,38 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         form.images.len(),
     );
 
-    let post_file_name = tera::create_post(&form).unwrap();
-    let date = NaiveDate::parse_from_str(&form.date, "%Y-%m-%d").unwrap();
+    let post_file_name = match tera::create_post(&form) {
+        Ok(name) => name,
+        Err(err) => {
+            error!("Failed to create post: {}", err);
+            return Html("Post creation failed".to_string());
+        }
+    };
 
-    println!(
-        "Post URL: https://kyrremann.no/plog/post/{}/{}/{}",
+    let date = match NaiveDate::parse_from_str(&form.date, "%Y-%m-%d") {
+        Ok(parsed_date) => parsed_date,
+        Err(err) => {
+            error!("Failed to parse date {}: {}", form.date, err);
+            return Html("Invalid date format".to_string());
+        }
+    };
+
+    let post_url = format!(
+        "https://kyrremann.no/plog/post/{}/{}/{}",
         date.year(),
         date.month(),
         post_file_name
     );
 
-    // brevo::post_campaign(
-    //     form.title,
-    //     form.description,
-    //     form.main_image,
-    //     format!(
-    //         "https://kyrremann.no/plog/post/{}/{}/{}",
-    //         date.year(),
-    //         date.month(),
-    //         post_file_name
-    //     ),
-    // )
-    // .await;
+    info!("Post URL: {}", post_url);
+
+    brevo::post_campaign(
+        form.title.clone(),
+        form.description.clone(),
+        form.main_image.clone(),
+        post_url.clone(),
+    )
+    .await;
 
     Html("Form and multipart data processed successfully!".to_string())
 }

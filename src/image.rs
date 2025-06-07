@@ -1,7 +1,7 @@
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{GenericImageView, ImageReader};
-use log::info;
+use log::{error, info};
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use std::io::{BufWriter, Cursor};
@@ -13,7 +13,7 @@ pub(crate) async fn upload_image(
     path: &str,
     content_type: &str,
     resized_image: BufWriter<Vec<u8>>,
-) {
+) -> Result<(), String> {
     let bucket_name = "kyrremann-plog";
     let region_name = "nl-ams".to_string();
     let endpoint = "https://s3.nl-ams.scw.cloud".to_string();
@@ -21,26 +21,35 @@ pub(crate) async fn upload_image(
         region: region_name,
         endpoint,
     };
-    let credentials =
-        Credentials::new(None, None, None, None, None).expect("Failed to create credentials");
-    let bucket = Bucket::new(bucket_name, region, credentials).expect("Failed to create bucket");
+    let credentials = Credentials::new(None, None, None, None, None)
+        .map_err(|e| format!("Failed to create credentials: {}", e))?;
+    let bucket = Bucket::new(bucket_name, region, credentials)
+        .map_err(|e| format!("Failed to create bucket: {}", e))?;
 
-    let response = bucket
+    match bucket
         .put_object_with_content_type(path, &resized_image.into_inner().unwrap(), content_type)
-        .await;
-
-    match response {
-        Ok(_) => println!("Uploaded {}", path),
-        Err(e) => eprintln!("Failed to upload {} to S3: {}", path, e),
+        .await
+    {
+        Ok(_) => {
+            info!("Uploaded {}", path);
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to upload {} to S3: {}", path, e);
+            Err(format!("Failed to upload {} to S3: {}", path, e))
+        }
     }
 }
 
-pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWriter<Vec<u8>> {
+pub(crate) async fn resize_with_quality(
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<BufWriter<Vec<u8>>, String> {
     let src_image = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .expect("Failed to guess image format")
+        .map_err(|e| format!("Failed to guess image format: {}", e))?
         .decode()
-        .expect("Failed to decode image");
+        .map_err(|e| format!("Failed to decode image: {}", e))?;
 
     let (src_width, src_height) = src_image.dimensions();
     if src_width <= MAX_DIMENSION && src_height <= MAX_DIMENSION {
@@ -48,7 +57,7 @@ pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWri
             "Image {} is already smaller than {} pixels on the longest side, skipping resize.",
             file_name, MAX_DIMENSION
         );
-        return BufWriter::new(bytes.to_vec());
+        return Ok(BufWriter::new(bytes.to_vec()));
     }
 
     let scale_factor = if src_width > src_height {
@@ -74,9 +83,9 @@ pub(crate) async fn resize_with_quality(file_name: &str, bytes: &[u8]) -> BufWri
     let encoder = JpegEncoder::new_with_quality(&mut buf, JPEG_QUALITY);
     final_image
         .write_with_encoder(encoder)
-        .expect("Failed to encode image");
+        .map_err(|e| format!("Failed to encode image: {}", e))?;
 
-    buf
+    Ok(buf)
 }
 
 #[cfg(test)]
@@ -97,7 +106,9 @@ mod tests {
             .expect("Failed to read input image");
 
         // Call the resize_with_quality function
-        let resized_image = resize_with_quality("20250529_124118.jpg", &buffer).await;
+        let resized_image = resize_with_quality("20250529_124118.jpg", &buffer)
+            .await
+            .unwrap();
 
         // Save the resized image to disk
         let mut output_file = File::create(output_path).expect("Failed to create output image");
