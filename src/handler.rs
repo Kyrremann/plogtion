@@ -18,77 +18,80 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
+        info!("Processing field: {}", name);
 
-        if name != "images" {
+        if name == "title" {
             let text = field.text().await.unwrap();
+            form.title = text.clone();
+        } else if name == "description" {
+            let text = field.text().await.unwrap();
+            form.description = text.clone()
+        } else if name == "date" {
+            let text = field.text().await.unwrap();
+            form.date = text.clone()
+        } else if name == "categories" {
+            let text = field.text().await.unwrap();
+            form.categories = text.clone();
+        } else if name.ends_with("_alt_text") {
+            let text = field.text().await.unwrap();
+            let key = name.split("_alt_text").next().unwrap();
 
-            if name == "title" {
-                form.title = text.clone();
-            } else if name == "description" {
-                form.description = text.clone()
-            } else if name == "date" {
-                form.date = text.clone()
-            } else if name == "categories" {
-                form.categories = text.clone();
-            } else if name.ends_with("_altText") {
-                let key = name.split("_altText").next().unwrap();
-
-                if let Some(value) = form.images.get_mut(key) {
-                    value.alt_text = text.clone();
-                } else {
-                    form.images.insert(
-                        key.to_string(),
-                        ImageMetadata {
-                            alt_text: text.clone(),
-                            ..Default::default()
-                        },
-                    );
-                }
-            } else if name.ends_with("_description") {
-                let key = name.split("_description").next().unwrap();
-
-                if let Some(value) = form.images.get_mut(key) {
-                    value.description = text.clone();
-                } else {
-                    form.images.insert(
-                        key.to_string(),
-                        ImageMetadata {
-                            description: text.clone(),
-                            ..Default::default()
-                        },
-                    );
-                }
-            } else if name.ends_with("_location") {
-                let key = name.split("_location").next().unwrap();
-
-                if let Some(value) = form.images.get_mut(key) {
-                    value.location = text.clone();
-                } else {
-                    form.images.insert(
-                        key.to_string(),
-                        ImageMetadata {
-                            location: text.clone(),
-                            ..Default::default()
-                        },
-                    );
-                }
+            if let Some(value) = form.images.get_mut(key) {
+                value.alt_text = text.clone();
+            } else {
+                form.images.insert(
+                    key.to_string(),
+                    ImageMetadata {
+                        alt_text: text.clone(),
+                        ..Default::default()
+                    },
+                );
             }
-            println!("Field: {} = {}", name, &text);
-        } else {
+        } else if name.ends_with("_description") {
+            let text = field.text().await.unwrap();
+            let key = name.split("_description").next().unwrap();
+
+            if let Some(value) = form.images.get_mut(key) {
+                value.description = text.clone();
+            } else {
+                form.images.insert(
+                    key.to_string(),
+                    ImageMetadata {
+                        description: text.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
+        } else if name.ends_with("_location") {
+            let text = field.text().await.unwrap();
+            let key = name.split("_location").next().unwrap();
+
+            if let Some(value) = form.images.get_mut(key) {
+                value.location = text.clone();
+            } else {
+                form.images.insert(
+                    key.to_string(),
+                    ImageMetadata {
+                        location: text.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
+            // println!("Field: {} = {}", name, &text);
+        } else if name == "filepond" {
             let file_name = field.file_name().unwrap().to_string();
-            let content_type = field.content_type().unwrap().to_string();
+            let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
             let data = field.bytes().await.unwrap();
 
             let mut file = File::create(format!("images/{file_name}")).unwrap();
             file.write_all(&data).unwrap();
-
-            println!(
+            info!(
                 "Size of {file_name} ({content_type}) is {} bytes",
                 data.len()
             );
 
+            info!("Resizing image: {}", file_name);
             let resized_image = image::resize_with_quality(&file_name, &data).await.unwrap();
-
             let date_from_name = file_name.split("_").next().unwrap();
             let date_only = NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap();
             let path = format!(
@@ -118,6 +121,10 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                     },
                 );
             }
+
+            println!("Base64 image uploaded: {}", file_name);
+        } else {
+            error!("Unknown field: {}", name);
         }
     }
 
@@ -130,6 +137,13 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         form.main_image,
         form.images.len(),
     );
+
+    for (key, metadata) in &form.images {
+        info!(
+            "Image: {}, Location: {}, Description: {}, Alt Text: {}",
+            key, metadata.location, metadata.description, metadata.alt_text
+        );
+    }
 
     let post_file_name = match tera::create_post(&form) {
         Ok(name) => name,
