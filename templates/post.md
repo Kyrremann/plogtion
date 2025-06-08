@@ -5,12 +5,10 @@ categories: {{ form.categories }}
 image: {{ form.main_image }}
 ---
 
-{% for key, metadata in form.images -%}
-{{ metadata.description }}
-{%- if metadata.image == form.main_image -%}
-{%- else -%}
+{{ form.description }}
+{%- for key, metadata in form.images -%}
+{%- if loop.first %}{% continue %}{% endif -%}
 ![{{ metadata.alt_text }}]({{ metadata.image }})
 {{ metadata.description }}
 {{ metadata.location }}
-{% endif -%}
-{% endfor -%}
+{%- endfor -%}
