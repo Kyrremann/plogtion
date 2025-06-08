@@ -90,8 +90,6 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 data.len()
             );
 
-            info!("Resizing image: {}", file_name);
-            let resized_image = image::resize_with_quality(&file_name, &data).await.unwrap();
             let date_from_name = file_name.split("_").next().unwrap();
             let date_only = NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap();
             let path = format!(
@@ -105,7 +103,8 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 form.main_image = format!("{DEFAULT_IMAGE_URL}/{path}");
             }
 
-            if let Err(err) = image::upload_image(&path, &content_type, resized_image).await {
+            log::info!("Uploading image: {}", file_name);
+            if let Err(err) = image::upload_image(&path, &content_type, data.to_vec()).await {
                 error!("Failed to upload image {}: {}", path, err);
                 return Html("Image upload failed".to_string());
             }
