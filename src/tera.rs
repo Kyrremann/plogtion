@@ -6,11 +6,13 @@ use std::io::Write;
 use std::sync::OnceLock;
 use tera::Tera;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ImageMetadata {
     pub location: String,
+    pub coordinates: String,
     pub description: String,
     pub alt_text: String,
+    pub caption: String,
     pub image: String,
 }
 
@@ -18,9 +20,9 @@ pub struct ImageMetadata {
 pub struct UploadForm {
     pub title: String,
     pub categories: String,
-    pub description: String,
+    pub strava: String,
     pub date: String,
-    pub main_image: String,
+    pub main: ImageMetadata,
     pub images: HashMap<String, ImageMetadata>,
 }
 

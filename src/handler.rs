@@ -7,11 +7,53 @@ use axum::extract::Multipart;
 use axum::response::Html;
 use chrono::{Datelike, NaiveDate};
 use log::{error, info};
+use serde::Deserialize;
 use std::{fs::File, io::Write};
 
 const DEFAULT_IMAGE_URL: &str = "https://kyrremann-plog.s3.nl-ams.scw.cloud";
 
+#[derive(Deserialize)]
+pub struct Geocoding {
+    #[serde(default)]
+    pub suburb: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub municipality: String,
+    pub country: String,
+}
+
+#[derive(Deserialize)]
+pub struct Location {
+    pub geocoding: Geocoding,
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+impl Location {
+    fn geocoding_as_string(&self) -> String {
+        let mut parts = vec![];
+        if !self.geocoding.suburb.is_empty() {
+            parts.push(self.geocoding.suburb.clone());
+        }
+        if !self.geocoding.city.is_empty() && parts.contains(&self.geocoding.city) {
+            parts.push(self.geocoding.city.clone());
+        }
+        if !self.geocoding.municipality.is_empty() && !parts.contains(&self.geocoding.municipality)
+        {
+            parts.push(self.geocoding.municipality.clone());
+        }
+        if !self.geocoding.country.is_empty() && !parts.contains(&self.geocoding.country) {
+            parts.push(self.geocoding.country.clone());
+        }
+
+        parts.join(", ")
+    }
+}
+
 pub async fn upload(mut multipart: Multipart) -> Html<String> {
+    let mut first_image: String = String::new();
+
     let mut form = UploadForm {
         ..Default::default()
     };
@@ -23,9 +65,9 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         if name == "title" {
             let text = field.text().await.unwrap();
             form.title = text.clone();
-        } else if name == "description" {
+        } else if name == "strava" {
             let text = field.text().await.unwrap();
-            form.description = text.clone()
+            form.strava = text.clone()
         } else if name == "date" {
             let text = field.text().await.unwrap();
             form.date = text.clone()
@@ -43,6 +85,21 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                     key.to_string(),
                     ImageMetadata {
                         alt_text: text.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
+        } else if name.ends_with("_caption") {
+            let text = field.text().await.unwrap();
+            let key = name.split("_caption").next().unwrap();
+
+            if let Some(value) = form.images.get_mut(key) {
+                value.caption = text.clone();
+            } else {
+                form.images.insert(
+                    key.to_string(),
+                    ImageMetadata {
+                        caption: text.clone(),
                         ..Default::default()
                     },
                 );
@@ -66,13 +123,24 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             let text = field.text().await.unwrap();
             let key = name.split("_location").next().unwrap();
 
+            // TODO: What if location is empty?
+            let location: Location = match serde_json::from_str(&text) {
+                Ok(loc) => loc,
+                Err(err) => {
+                    error!("Failed to parse location JSON: {}", err);
+                    continue;
+                }
+            };
+
             if let Some(value) = form.images.get_mut(key) {
-                value.location = text.clone();
+                value.location = location.geocoding_as_string();
+                value.coordinates = format!("{},{}", location.latitude, location.longitude);
             } else {
                 form.images.insert(
                     key.to_string(),
                     ImageMetadata {
-                        location: text.clone(),
+                        location: location.geocoding_as_string(),
+                        coordinates: format!("{},{}", location.latitude, location.longitude),
                         ..Default::default()
                     },
                 );
@@ -99,10 +167,6 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 file_name
             );
 
-            if form.main_image.is_empty() {
-                form.main_image = format!("{DEFAULT_IMAGE_URL}/{path}");
-            }
-
             log::info!("Uploading image: {}", file_name);
             if let Err(err) = image::upload_image(&path, &content_type, data.to_vec()).await {
                 error!("Failed to upload image {}: {}", path, err);
@@ -121,28 +185,33 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                 );
             }
 
+            if first_image.is_empty() {
+                first_image = file_name.clone();
+            }
+
             println!("Base64 image uploaded: {}", file_name);
         } else {
             error!("Unknown field: {}", name);
         }
     }
 
+    if let Some(first) = form.images.get(&first_image) {
+        form.main = first.clone();
+    } else {
+        error!("No main image specified or found");
+        return Html("No images supplied".to_string());
+    }
+
     info!(
-        "Title: {}, Categories: {}, Description: {}, Date: {}, Main: {}, Images: {}",
+        "Title: {}, Categories: {}, Strava: {}, Date: {}, Main.location: {}, Main.coordinates: {}, Images: {}",
         form.title,
         form.categories,
-        form.description,
+        form.strava,
         form.date,
-        form.main_image,
+        form.main.location,
+        form.main.coordinates,
         form.images.len(),
     );
-
-    for (key, metadata) in &form.images {
-        info!(
-            "Image: {}, Location: {}, Description: {}, Alt Text: {}",
-            key, metadata.location, metadata.description, metadata.alt_text
-        );
-    }
 
     let post_file_name = match tera::create_post(&form) {
         Ok(name) => name,
