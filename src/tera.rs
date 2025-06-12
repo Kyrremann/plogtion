@@ -26,6 +26,28 @@ pub struct UploadForm {
     pub images: HashMap<String, ImageMetadata>,
 }
 
+// I want the validate function to be a function implemented on the UploadForm struct
+impl UploadForm {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.title.is_empty() {
+            return Err("Title cannot be empty".to_string());
+        }
+        if self.categories.is_empty() {
+            return Err("Categories cannot be empty".to_string());
+        }
+        if self.date.is_empty() {
+            return Err("Date cannot be empty".to_string());
+        }
+        if self.main.image_url.is_empty() {
+            return Err("Main image URL cannot be empty".to_string());
+        }
+        if self.main.description.is_empty() {
+            return Err("Main image description cannot be empty".to_string());
+        }
+        Ok(())
+    }
+}
+
 static TERA: OnceLock<Tera> = OnceLock::new();
 
 pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {

@@ -202,6 +202,11 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
         return Html("No images supplied".to_string());
     }
 
+    if let Err(err) = form.validate() {
+        error!("Form validation failed: {}", err);
+        return Html(format!("Form validation failed: {}", err));
+    }
+
     info!(
         "Title: {}, Categories: {}, Strava: {}, Date: {}, Main.location: {}, Main.coordinates: {}, Images: {}",
         form.title,
