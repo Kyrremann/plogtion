@@ -5,7 +5,7 @@ mod tera;
 use crate::tera::{ImageMetadata, UploadForm};
 use axum::extract::Multipart;
 use axum::response::Html;
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use log::{error, info};
 use serde::Deserialize;
 use std::{fs::File, io::Write};
@@ -123,7 +123,6 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             let text = field.text().await.unwrap();
             let key = name.split("_location").next().unwrap();
 
-            // TODO: What if location is empty?
             let location: Location = match serde_json::from_str(&text) {
                 Ok(loc) => loc,
                 Err(err) => {
@@ -158,7 +157,12 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             );
 
             let date_from_name = file_name.split("_").next().unwrap();
-            let date_only = NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap();
+            let date_only =
+                NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap_or_else(|_| {
+                    error!("Failed to parse date from file name: {}", date_from_name);
+                    NaiveDate::parse_from_str(&form.date, "%Y-%m-%d")
+                        .unwrap_or(Local::now().date_naive())
+                });
             let path = format!(
                 "images/{}/{:02}/{}",
                 date_only.year(),

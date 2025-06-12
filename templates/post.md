@@ -9,7 +9,7 @@ main:
   location: "{{ form.main.location }}"
   coordinates: "{{ form.main.coordinates }}"
   coordinates_url: "https://www.google.com/maps/place/{{ form.main.coordinates }}"
-strava: "{{ form.strava }}"
+{% if form.strava %}strava: "{{ form.strava }}"{% endif %}
 ---
 
 {{ form.main.description }}
@@ -17,7 +17,9 @@ strava: "{{ form.strava }}"
 {% for key, metadata in form.images -%}
 {%- if loop.first %}{% continue %}{% endif -%}
 ![{{ metadata.alt_text }}]({{ metadata.image_url }})
+{%- if metadata.location %}
 *[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {{ metadata.caption }}*
+{% endif %}
 
 {{ metadata.description }}
 {%- endfor -%}
