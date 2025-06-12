@@ -52,9 +52,8 @@ static TERA: OnceLock<Tera> = OnceLock::new();
 
 pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
     // Initialize Tera templates once
-    let tera = TERA.get_or_init(|| {
-        Tera::new("templates/**/*").expect("Failed to initialize Tera templates")
-    });
+    let tera = TERA
+        .get_or_init(|| Tera::new("templates/**/*").expect("Failed to initialize Tera templates"));
 
     let mut context = tera::Context::new();
     context.insert("form", upload_form);

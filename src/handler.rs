@@ -145,7 +145,6 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
                     },
                 );
             }
-            // println!("Field: {} = {}", name, &text);
         } else if name == "filepond" {
             let file_name = field.file_name().unwrap().to_string();
             let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
