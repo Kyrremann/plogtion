@@ -13,7 +13,7 @@ pub struct ImageMetadata {
     pub description: String,
     pub alt_text: String,
     pub caption: String,
-    pub image: String,
+    pub image_url: String,
 }
 
 #[derive(Deserialize, Serialize, Default)]

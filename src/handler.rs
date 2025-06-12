@@ -174,12 +174,12 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
             }
 
             if let Some(metadata) = form.images.get_mut(&file_name) {
-                metadata.image = path.clone();
+                metadata.image_url = path.clone();
             } else {
                 form.images.insert(
                     file_name.clone(),
                     ImageMetadata {
-                        image: format!("{DEFAULT_IMAGE_URL}/{path}"),
+                        image_url: format!("{DEFAULT_IMAGE_URL}/{path}"),
                         ..Default::default()
                     },
                 );
@@ -240,8 +240,8 @@ pub async fn upload(mut multipart: Multipart) -> Html<String> {
 
     brevo::post_campaign(
         form.title.clone(),
-        form.description.clone(),
-        form.main_image.clone(),
+        form.main.description.clone(),
+        form.main.image_url.clone(),
         post_url.clone(),
     )
     .await;

@@ -3,7 +3,7 @@ title: "{{ form.title }}"
 date: "{{ form.date }}"
 categories: "{{ form.categories }}"
 main:
-  image: "{{ form.main.image }}"
+  image: "{{ form.main.image_url }}"
   alt_text: "{{ form.main.alt_text }}"
   caption: "{{ form.main.caption }}"
   location: "{{ form.main.location }}"
@@ -16,7 +16,7 @@ strava: "{{ form.strava }}"
 
 {% for key, metadata in form.images -%}
 {%- if loop.first %}{% continue %}{% endif -%}
-![{{ metadata.alt_text }}]({{ metadata.image }})
+![{{ metadata.alt_text }}]({{ metadata.image_url }})
 *[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {{ metadata.caption }}*
 
 {{ metadata.description }}
