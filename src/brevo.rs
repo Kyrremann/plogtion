@@ -1,3 +1,4 @@
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -36,8 +37,8 @@ pub async fn post_campaign(
     description: String,
     image_url: String,
     post_url: String,
-) {
-    let api_key = std::env::var("BREVO_API_KEY").expect("BREVO_API_KEY not set");
+) -> Result<(), String> {
+    let api_key = std::env::var("BREVO_API_KEY").map_err(|_| "BREVO_API_KEY not set".to_string())?;
 
     let scheduled_at = chrono::Utc::now() + chrono::Duration::hours(1);
     let mut params = std::collections::HashMap::new();
@@ -62,28 +63,21 @@ pub async fn post_campaign(
         .header("api-key", api_key)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
-        .json(&serde_json::json!(&campaign))
+        .json(&campaign)
         .send()
-        .await;
+        .await
+        .map_err(|err| format!("Request failed: {}", err))?;
 
-    match response {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                println!("Campaign posted successfully!");
-            } else {
-                let status = resp.status();
-                let error: BrevoResponse = resp.json().await.unwrap_or_else(|_| BrevoResponse {
-                    code: "Unknown error".to_string(),
-                    message: "Failed to parse error response".to_string(),
-                });
-                println!(
-                    "Failed to post campaign: {}: {}:{}",
-                    status, error.message, error.code
-                );
-            }
-        }
-        Err(err) => {
-            println!("Request failed: {}", err);
-        }
+    if response.status().is_success() {
+        info!("Campaign posted successfully!");
+        Ok(())
+    } else {
+        let status = response.status();
+        let error: BrevoResponse = response.json().await.unwrap_or_else(|_| BrevoResponse {
+            code: "Unknown error".to_string(),
+            message: "Failed to parse error response".to_string(),
+        });
+        error!("Failed to post campaign: {}: {}:{}", status, error.message, error.code);
+        Err(format!("Failed to post campaign: {}: {}", status, error.message))
     }
 }

@@ -51,20 +51,16 @@ impl UploadForm {
 static TERA: OnceLock<Tera> = OnceLock::new();
 
 pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
-    // Initialize Tera templates once
     let tera = TERA
         .get_or_init(|| Tera::new("templates/**/*").expect("Failed to initialize Tera templates"));
 
     let mut context = tera::Context::new();
     context.insert("form", upload_form);
 
-    let rendered = match tera.render("post.md", &context) {
-        Ok(content) => content,
-        Err(err) => {
-            error!("Failed to render template: {}", err);
-            return Err("Template rendering failed".to_string());
-        }
-    };
+    let rendered = tera.render("post.md", &context).map_err(|err| {
+        error!("Failed to render template: {}", err);
+        "Template rendering failed".to_string()
+    })?;
 
     let file_name_safe_title = upload_form
         .title
@@ -76,18 +72,12 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
 
     let file_name = format!("_posts/{}-{}.md", upload_form.date, file_name_safe_title);
 
-    match File::create(&file_name) {
-        Ok(mut file) => {
-            if let Err(err) = file.write_all(rendered.as_bytes()) {
-                error!("Failed to write rendered content to file: {}", err);
-                return Err("File writing failed".to_string());
-            }
-        }
-        Err(err) => {
-            error!("Failed to create output file: {}", err);
-            return Err("File creation failed".to_string());
-        }
-    }
+    File::create(&file_name)
+        .and_then(|mut file| file.write_all(rendered.as_bytes()))
+        .map_err(|err| {
+            error!("Failed to write rendered content to file: {}", err);
+            "File writing failed".to_string()
+        })?;
 
     info!("Post created successfully: {}", file_name);
     Ok(file_name_safe_title)

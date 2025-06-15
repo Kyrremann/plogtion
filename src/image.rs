@@ -19,17 +19,14 @@ pub(crate) async fn upload_image(
     let bucket = Bucket::new(bucket_name, region, credentials)
         .map_err(|e| format!("Failed to create bucket: {}", e))?;
 
-    match bucket
+    bucket
         .put_object_with_content_type(path, &image, content_type)
         .await
-    {
-        Ok(_) => {
-            info!("Uploaded {}", path);
-            Ok(())
-        }
-        Err(e) => {
+        .map_err(|e| {
             error!("Failed to upload {} to S3: {}", path, e);
-            Err(format!("Failed to upload {} to S3: {}", path, e))
-        }
-    }
+            format!("Failed to upload {} to S3: {}", path, e)
+        })?;
+
+    info!("Uploaded {} successfully", path);
+    Ok(())
 }
