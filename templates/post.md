@@ -15,7 +15,7 @@ main:
 {{ form.main.description }}
 
 {% for key, metadata in form.images -%}
-{%- if loop.first %}{% continue %}{% endif -%}
+{%- if key == form.main.file_name %}{% continue %}{% endif -%}
 ![{{ metadata.alt_text }}]({{ metadata.image_url }})
 {%- if metadata.location %}
 *[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {{ metadata.caption }}*

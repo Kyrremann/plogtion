@@ -157,6 +157,7 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
 
     if let Some(first) = form.images.get(&first_image) {
         form.main = first.clone();
+        form.main.file_name = first_image.clone();
     } else {
         error!("No main image specified or found");
         return Err((
