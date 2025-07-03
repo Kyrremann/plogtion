@@ -14,7 +14,7 @@ main:
 
 {{ form.main.description }}
 
-{% for key, metadata in form.images -%}
+{% for key, metadata in form.images %}
 {%- if key == form.main.file_name %}{% continue %}{% endif -%}
 ![{{ metadata.alt_text }}]({{ metadata.image_url }})
 {%- if metadata.location %}
@@ -23,3 +23,4 @@ main:
 {%- if metadata.description %}
 {{ metadata.description }}
 {% endif %}
+{% endfor -%}
