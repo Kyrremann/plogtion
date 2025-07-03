@@ -20,6 +20,6 @@ main:
 {%- if metadata.location %}
 *[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {{ metadata.caption }}*
 {% endif %}
-
+{%- if metadata.description %}
 {{ metadata.description }}
-{%- endfor -%}
+{% endif %}
