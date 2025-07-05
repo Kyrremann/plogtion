@@ -250,7 +250,7 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         })?;
 
     let post_url = format!(
-        "https://kyrremann.no/plog/{}/{}/{}",
+        "https://kyrremann.no/plog/{}/{:02}/{}",
         date.year(),
         date.month(),
         safe_file_name
