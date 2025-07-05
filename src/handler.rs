@@ -263,7 +263,14 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         form.main.image_url.clone(),
         post_url.clone(),
     )
-    .await;
+    .await
+    .map_err(|err| {
+        error!("Failed to post campaign: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to post campaign".to_string(),
+        )
+    })?;
 
     Ok(Html(
         "Form and multipart data processed successfully!".to_string(),
