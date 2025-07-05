@@ -6,3 +6,4 @@ images/
 *.zip
 .env
 testdata/resized_output.jpg
+plog/
