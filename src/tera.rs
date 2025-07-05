@@ -63,13 +63,7 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
         "Template rendering failed".to_string()
     })?;
 
-    let file_name_safe_title = upload_form
-        .title
-        .replace(|c: char| !c.is_alphanumeric(), "-")
-        .to_lowercase()
-        .replace("--", "-")
-        .trim_matches('-')
-        .to_string();
+    let file_name_safe_title = create_file_name_safe_title(&upload_form.title);
 
     let file_name = format!(
         "plog/_posts/{}-{}.md",
@@ -85,4 +79,48 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
 
     info!("Post created successfully: {}", file_name);
     Ok(file_name_safe_title)
+}
+
+fn create_file_name_safe_title(title: &str) -> String {
+    trim_whitespace(&title.replace(|c: char| !c.is_alphanumeric(), " "))
+        .to_lowercase()
+        .to_string()
+}
+
+// From https://stackoverflow.com/a/71864249/502493
+pub fn trim_whitespace(s: &str) -> String {
+    // second attempt: only allocate a string
+    let mut result = String::with_capacity(s.len());
+    s.split_whitespace().for_each(|w| {
+        if !result.is_empty() {
+            result.push('-');
+        }
+        result.push_str(w);
+    });
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_file_name_safe_title() {
+        let cases = vec![
+            ("Hello World", "hello-world"),
+            ("Rust Programming!", "rust-programming"),
+            ("Multiple   Spaces", "multiple-spaces"),
+            ("Special@#Characters", "special-characters"),
+            ("--Already-Safe--", "already-safe"),
+            ("Trailing--", "trailing"),
+            (
+                "Day two, 108km, 864m - Wonderful weather on straight roads",
+                "day-two-108km-864m-wonderful-weather-on-straight-roads",
+            ),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(create_file_name_safe_title(input), expected);
+        }
+    }
 }
