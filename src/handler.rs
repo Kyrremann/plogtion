@@ -33,6 +33,13 @@ pub struct Location {
     pub longitude: f64,
 }
 
+struct ImageUpload {
+    file_name: String,
+    path: String,
+    content_type: String,
+    data: Vec<u8>,
+}
+
 impl Location {
     fn geocoding_as_string(&self) -> String {
         let mut parts = vec![];
@@ -55,10 +62,11 @@ impl Location {
 }
 
 pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCode, String)> {
-    let mut first_image: String = String::new();
     let mut form = UploadForm {
         ..Default::default()
     };
+    let mut token = String::new();
+    let mut image_uploads: Vec<ImageUpload> = vec![];
 
     while let Some(field) = multipart.next_field().await.map_err(|err| {
         error!("Failed to read multipart field: {}", err);
@@ -71,6 +79,7 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         info!("Processing field: {}", name);
 
         match name.as_str() {
+            "token" => token = field.text().await.unwrap_or_default(),
             "title" => form.title = field.text().await.unwrap_or_default(),
             "strava" => form.strava = field.text().await.unwrap_or_default(),
             "date" => form.date = field.text().await.unwrap_or_default(),
@@ -88,7 +97,8 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
             name if name.ends_with("_description") => {
                 let text = field.text().await.unwrap_or_default();
                 let key = name.strip_suffix("_description").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().description = text; // Todo: enable newlines text.replace("\r\n", "\n");
+                form.images.entry(key.to_string()).or_default().description =
+                    text.replace("\r\n", "\n");
             }
             name if name.ends_with("_location") => {
                 let text = field.text().await.unwrap_or_default();
@@ -131,20 +141,12 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                     file_name
                 );
 
-                if let Err(err) = image::upload_image(&path, &content_type, data.to_vec()).await {
-                    error!("Failed to upload image {}: {}", path, err);
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to upload image".to_string(),
-                    ));
-                }
-
-                form.images.entry(file_name.clone()).or_default().image_url =
-                    format!("{DEFAULT_IMAGE_URL}/{}", path);
-
-                if first_image.is_empty() {
-                    first_image = file_name;
-                }
+                image_uploads.push(ImageUpload {
+                    file_name: file_name.clone(),
+                    path,
+                    content_type,
+                    data: data.to_vec(),
+                });
             }
             _ => {
                 return Err((
@@ -155,7 +157,45 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         }
     }
 
-    if let Some(first) = form.images.get(&first_image) {
+    if token.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Token is required".to_string()));
+    }
+
+    let repository = git::clone_repository(&token).await.map_err(|err| {
+        error!("Failed to clone repository: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to clone repository".to_string(),
+        )
+    })?;
+
+    let first_image = &image_uploads
+        .first()
+        .map(|upload| upload.file_name.clone())
+        .unwrap_or_default();
+
+    for upload in image_uploads {
+        if let Err(err) = image::upload_image(
+            upload.path.as_str(),
+            upload.content_type.as_str(),
+            upload.data,
+        )
+        .await
+        {
+            error!("Failed to upload image {}: {}", upload.path, err);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to upload image".to_string(),
+            ));
+        }
+
+        form.images
+            .entry(upload.file_name.clone())
+            .or_default()
+            .image_url = format!("{DEFAULT_IMAGE_URL}/{}", upload.path);
+    }
+
+    if let Some(first) = form.images.get(first_image) {
         form.main = first.clone();
         form.main.file_name = first_image.clone();
     } else {
@@ -184,7 +224,7 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         form.main.coordinates,
         form.images.len(),
     );
-    let post_file_name = tera::create_post(&form).map_err(|err| {
+    let safe_file_name = tera::create_post(&form).map_err(|err| {
         error!("Failed to create post: {}", err);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -197,19 +237,25 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         (StatusCode::BAD_REQUEST, "Invalid date format".to_string())
     })?;
 
+    let file_in_git_dir = format!("_posts/{}-{}.md", form.date, safe_file_name);
+
+    git::commit_and_push(repository, &token, &file_in_git_dir, &form.title)
+        .await
+        .map_err(|err| {
+            error!("Failed to commit and push: {}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to commit and push".to_string(),
+            )
+        })?;
+
     let post_url = format!(
-        "https://kyrremann.no/plog/post/{}/{}/{}",
+        "https://kyrremann.no/plog/{}/{}/{}",
         date.year(),
         date.month(),
-        post_file_name
+        safe_file_name
     );
-
     info!("Post URL: {}", post_url);
-    todo!("Implement git commit and push");
-    // git::commit_and_push(&post_file_name, &form.title).map_err(|err| {
-    //     error!("Failed to commit and push post: {}", err);
-    //     return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    // })?;
 
     brevo::post_campaign(
         form.title.clone(),

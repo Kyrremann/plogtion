@@ -8,6 +8,7 @@ use tera::Tera;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ImageMetadata {
+    pub file_name: String,
     pub location: String,
     pub coordinates: String,
     pub description: String,
@@ -70,10 +71,13 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
         .trim_matches('-')
         .to_string();
 
-    let file_name = format!("_posts/{}-{}.md", upload_form.date, file_name_safe_title);
+    let file_name = format!(
+        "plog/_posts/{}-{}.md",
+        upload_form.date, file_name_safe_title
+    );
 
     File::create(&file_name)
-        .and_then(|mut file| file.write_all(rendered.as_bytes()))
+        .and_then(|mut file| file.write_all(rendered.trim_end().as_bytes()))
         .map_err(|err| {
             error!("Failed to write rendered content to file: {}", err);
             "File writing failed".to_string()

@@ -9,7 +9,7 @@ use structured_logger::{Builder, async_json::new_writer};
 
 #[tokio::main]
 async fn main() {
-    Builder::with_level("debug")
+    Builder::with_level("info")
         .with_target_writer("*", new_writer(tokio::io::stdout()))
         .init();
 
@@ -58,9 +58,8 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
 "#
             .to_string(),
         ),
-        Err((status_code, message)) => {
-            Html(format!(
-                r#"<!doctype html>
+        Err((status_code, message)) => Html(format!(
+            r#"<!doctype html>
 <html lang="en">
   <head>
     <title>Plogtion: Failed</title>
@@ -72,9 +71,7 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
   </body>
 </html>
 "#,
-                status_code,
-                message
-            ))
-        }
+            status_code, message
+        )),
     }
 }
