@@ -38,7 +38,8 @@ pub async fn post_campaign(
     image_url: String,
     post_url: String,
 ) -> Result<(), String> {
-    let api_key = std::env::var("BREVO_API_KEY").map_err(|_| "BREVO_API_KEY not set".to_string())?;
+    let api_key =
+        std::env::var("BREVO_API_KEY").map_err(|_| "BREVO_API_KEY not set".to_string())?;
 
     let scheduled_at = chrono::Utc::now() + chrono::Duration::hours(1);
     let mut params = std::collections::HashMap::new();
@@ -77,7 +78,13 @@ pub async fn post_campaign(
             code: "Unknown error".to_string(),
             message: "Failed to parse error response".to_string(),
         });
-        error!("Failed to post campaign: {}: {}:{}", status, error.message, error.code);
-        Err(format!("Failed to post campaign: {}: {}", status, error.message))
+        error!(
+            "Failed to post campaign: {}: {}:{}",
+            status, error.message, error.code
+        );
+        Err(format!(
+            "Failed to post campaign: {}: {}",
+            status, error.message
+        ))
     }
 }
