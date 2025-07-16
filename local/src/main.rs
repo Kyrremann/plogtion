@@ -1,24 +1,25 @@
 use axum::{
     Router,
-    extract::{DefaultBodyLimit, Multipart},
-    response::{Html, IntoResponse},
-    routing::{get, post},
+    body::Body,
+    extract::Multipart,
+    http::Request,
+    response::{Html, IntoResponse, Response},
+    routing::{delete, get, post},
 };
-use plogtion::upload;
-use structured_logger::{Builder, async_json::new_writer};
 
 #[tokio::main]
 async fn main() {
-    Builder::with_level("info")
-        .with_target_writer("*", new_writer(tokio::io::stdout()))
-        .init();
+    env_logger::init();
 
     let app = Router::new()
         .route("/", get(show_index))
         .route("/post", post(upload_handler))
-        .layer(DefaultBodyLimit::max(
-            1024 * 1024 * 100, // 100 MB
-        ));
+        .route("/image", post(image_handler))
+        .route("/image", delete(delete_image_handler))
+    // .layer(DefaultBodyLimit::max(
+    //     1024 * 1024 * 6, // 6 MB
+    // ))
+        ;
 
     log::info!("Starting Plogtion server...");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
@@ -42,7 +43,7 @@ async fn show_index() -> impl IntoResponse {
 }
 
 async fn upload_handler(multipart: Multipart) -> Html<String> {
-    match upload(multipart).await {
+    match post_form::handle(multipart).await {
         Ok(_) => Html(
             r#"<!doctype html>
 <html lang="en">
@@ -74,4 +75,12 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
             status_code, message
         )),
     }
+}
+
+async fn image_handler(multipart: Multipart) -> Response<Body> {
+    image_process::handle(multipart).await
+}
+
+async fn delete_image_handler(req: Request<Body>) {
+    image_revert::handle(req).await;
 }

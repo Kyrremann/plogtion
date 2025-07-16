@@ -1,6 +1,5 @@
 mod brevo;
 mod git;
-mod image;
 mod tera;
 
 use crate::tera::UploadForm;
@@ -33,13 +32,6 @@ pub struct Location {
     pub longitude: f64,
 }
 
-struct ImageUpload {
-    file_name: String,
-    path: String,
-    content_type: String,
-    data: Vec<u8>,
-}
-
 impl Location {
     fn geocoding_as_string(&self) -> String {
         let mut parts = vec![];
@@ -61,12 +53,16 @@ impl Location {
     }
 }
 
-pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCode, String)> {
+pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCode, String)> {
+    env_logger::try_init().unwrap_or_else(|_| {
+        eprintln!("Failed to initialize logger, using default settings");
+    });
+    info!("Payload received...");
+
     let mut form = UploadForm {
         ..Default::default()
     };
     let mut token = String::new();
-    let mut image_uploads: Vec<ImageUpload> = vec![];
 
     while let Some(field) = multipart.next_field().await.map_err(|err| {
         error!("Failed to read multipart field: {}", err);
@@ -114,39 +110,12 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 }
             }
             "filepond" => {
-                let file_name = field.file_name().unwrap_or_default().to_string();
-                let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
-                let data = field.bytes().await.unwrap_or_default();
+                let path = field.text().await.unwrap_or_default();
+                let file_name = path.split('/').last().unwrap_or_default().to_string();
 
-                let local_path = format!("images/{}", file_name);
-                if let Err(err) = save_file(&local_path, &data) {
-                    error!("Failed to save file {}: {}", local_path, err);
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to save file".to_string(),
-                    ));
-                }
-
-                let date_from_name = file_name.split('_').next().unwrap_or_default();
-                let date_only =
-                    NaiveDate::parse_from_str(date_from_name, "%Y%m%d").unwrap_or_else(|_| {
-                        error!("Failed to parse date from file name: {}", date_from_name);
-                        NaiveDate::parse_from_str(&form.date, "%Y-%m-%d")
-                            .unwrap_or_else(|_| Local::now().date_naive())
-                    });
-                let path = format!(
-                    "images/{}/{:02}/{}",
-                    date_only.year(),
-                    date_only.month(),
-                    file_name
-                );
-
-                image_uploads.push(ImageUpload {
-                    file_name: file_name.clone(),
-                    path,
-                    content_type,
-                    data: data.to_vec(),
-                });
+                let im = form.images.entry(file_name.to_string()).or_default();
+                im.file_name = file_name.clone();
+                im.image_url = format!("{DEFAULT_IMAGE_URL}/{}", path);
             }
             _ => {
                 return Err((
@@ -169,33 +138,11 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         )
     })?;
 
-    let first_image = &image_uploads
-        .first()
-        .map(|upload| upload.file_name.clone())
-        .unwrap_or_default();
+    let mut keys: Vec<_> = form.images.keys().cloned().collect();
+    keys.sort_by_key(|k| k.to_lowercase());
+    let first_image = keys.first().cloned().unwrap_or_default();
 
-    for upload in image_uploads {
-        if let Err(err) = image::upload_image(
-            upload.path.as_str(),
-            upload.content_type.as_str(),
-            upload.data,
-        )
-        .await
-        {
-            error!("Failed to upload image {}: {}", upload.path, err);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to upload image".to_string(),
-            ));
-        }
-
-        form.images
-            .entry(upload.file_name.clone())
-            .or_default()
-            .image_url = format!("{DEFAULT_IMAGE_URL}/{}", upload.path);
-    }
-
-    if let Some(first) = form.images.get(first_image) {
+    if let Some(first) = form.images.get(&first_image) {
         form.main = first.clone();
         form.main.file_name = first_image.clone();
     } else {
@@ -215,14 +162,8 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     }
 
     info!(
-        "Title: {}, Categories: {}, Strava: {}, Date: {}, Main.location: {}, Main.coordinates: {}, Images: {}",
-        form.title,
-        form.categories,
-        form.strava,
-        form.date,
-        form.main.location,
-        form.main.coordinates,
-        form.images.len(),
+        "Title: {}, Categories: {}, Strava: {}, Date: {}, Main: {:?}, Images: {:?}",
+        form.title, form.categories, form.strava, form.date, form.main, form.images,
     );
     let safe_file_name = tera::create_post(&form).map_err(|err| {
         error!("Failed to create post: {}", err);
@@ -237,17 +178,17 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         (StatusCode::BAD_REQUEST, "Invalid date format".to_string())
     })?;
 
-    let file_in_git_dir = format!("_posts/{}-{}.md", form.date, safe_file_name);
+    // let file_in_git_dir = format!("_posts/{}-{}.md", form.date, safe_file_name);
 
-    git::commit_and_push(repository, &token, &file_in_git_dir, &form.title)
-        .await
-        .map_err(|err| {
-            error!("Failed to commit and push: {}", err);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to commit and push".to_string(),
-            )
-        })?;
+    // git::commit_and_push(repository, &token, &file_in_git_dir, &form.title)
+    //     .await
+    //     .map_err(|err| {
+    //         error!("Failed to commit and push: {}", err);
+    //         (
+    //             StatusCode::INTERNAL_SERVER_ERROR,
+    //             "Failed to commit and push".to_string(),
+    //         )
+    //     })?;
 
     let post_url = format!(
         "https://kyrremann.no/plog/{}/{:02}/{}",
@@ -257,30 +198,22 @@ pub async fn upload(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     );
     info!("Post URL: {}", post_url);
 
-    brevo::post_campaign(
-        form.title.clone(),
-        form.main.description.clone(),
-        form.main.image_url.clone(),
-        post_url.clone(),
-    )
-    .await
-    .map_err(|err| {
-        error!("Failed to post campaign: {}", err);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to post campaign".to_string(),
-        )
-    })?;
+    // brevo::post_campaign(
+    //     form.title.clone(),
+    //     form.main.description.clone(),
+    //     form.main.image_url.clone(),
+    //     post_url.clone(),
+    // )
+    // .await
+    // .map_err(|err| {
+    //     error!("Failed to post campaign: {}", err);
+    //     (
+    //         StatusCode::INTERNAL_SERVER_ERROR,
+    //         "Failed to post campaign".to_string(),
+    //     )
+    // })?;
 
     Ok(Html(
         "Form and multipart data processed successfully!".to_string(),
     ))
-}
-
-fn save_file(path: &str, data: &[u8]) -> Result<(), String> {
-    let parent = Path::new(path).parent().ok_or("Invalid file path")?;
-    std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
-    let mut file = File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
-    file.write_all(data)
-        .map_err(|e| format!("Failed to write to file: {}", e))
 }

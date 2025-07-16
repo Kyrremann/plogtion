@@ -1,12 +1,12 @@
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::io::Write;
-use std::sync::OnceLock;
 use tera::Tera;
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct ImageMetadata {
     pub file_name: String,
     pub location: String,
@@ -49,11 +49,42 @@ impl UploadForm {
     }
 }
 
-static TERA: OnceLock<Tera> = OnceLock::new();
-
 pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
-    let tera = TERA
-        .get_or_init(|| Tera::new("templates/**/*").expect("Failed to initialize Tera templates"));
+    let mut tera = Tera::default();
+    tera.add_raw_template("post.md", r##"---
+title: "{{ form.title }}"
+date: "{{ form.date }}"
+categories: "{{ form.categories }}"
+main:
+  image: "{{ form.main.image_url }}"
+  alt_text: "{{ form.main.alt_text }}"
+  {%- if form.main.caption %}
+  caption: "{{ form.main.caption }}"
+  {% endif %}
+  {%- if form.main.location %}
+  location: "{{ form.main.location }}"
+  coordinates: "{{ form.main.coordinates }}"
+  coordinates_url: "https://www.google.com/maps/place/{{ form.main.coordinates }}"
+  {% endif %}
+{%- if form.strava %}strava: "{{ form.strava }}"{% endif %}
+---
+
+{{ form.main.description }}
+
+{% for key, metadata in form.images %}
+{%- if key == form.main.file_name %}{% continue %}{% endif -%}
+![{{ metadata.alt_text }}]({{ metadata.image_url }})
+{%- if metadata.caption %}
+*{%- if metadata.location %}[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {% endif %}{{ metadata.caption }}*
+{% endif %}
+{%- if metadata.description %}
+{{ metadata.description }}
+{% endif %}
+{% endfor -%}
+"##).map_err(|err| {
+        error!("Failed to add template: {}", err);
+        "Template initialization failed".to_string()
+    })?;
 
     let mut context = tera::Context::new();
     context.insert("form", upload_form);
@@ -69,6 +100,8 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
         "plog/_posts/{}-{}.md",
         upload_form.date, file_name_safe_title
     );
+
+    info!("Content to be written: {}", rendered.trim_end());
 
     File::create(&file_name)
         .and_then(|mut file| file.write_all(rendered.trim_end().as_bytes()))

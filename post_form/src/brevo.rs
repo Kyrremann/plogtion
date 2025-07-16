@@ -41,7 +41,7 @@ pub async fn post_campaign(
     let api_key =
         std::env::var("BREVO_API_KEY").map_err(|_| "BREVO_API_KEY not set".to_string())?;
 
-    let scheduled_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+    let scheduled_at = chrono::Utc::now() + chrono::Duration::minutes(500);
     let mut params = std::collections::HashMap::new();
     params.insert("TITLE".to_string(), title.clone());
     params.insert("DESCRIPTION".to_string(), description.clone());

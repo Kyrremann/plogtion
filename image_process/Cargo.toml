@@ -1,0 +1,14 @@
+[package]
+name = "image_process"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/handler.rs"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["multipart"] }
+rust-s3 = "0.35.1"
+chrono = "0.4.41"
+log = "0.4.27"
+env_logger = "0.11.8"

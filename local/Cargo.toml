@@ -1,0 +1,14 @@
+[package]
+name = "local"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+image_process = { path = "../image_process" }
+image_revert = { path = "../image_revert" }
+post_form = { path = "../post_form" }
+
+axum = { version = "0.8.1", features = ["multipart"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "rt", "macros"] }
+log = "0.4.27"
+env_logger = "0.11.8"

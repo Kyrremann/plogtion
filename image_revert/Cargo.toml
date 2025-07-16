@@ -1,0 +1,12 @@
+[package]
+name = "image_revert"
+version = "1.0.0"
+edition = "2024"
+
+[lib]
+path = "src/handler.rs"
+
+[dependencies]
+rust-s3 = "0.35.1"
+log = "0.4.27"
+axum = "0.8.4"
