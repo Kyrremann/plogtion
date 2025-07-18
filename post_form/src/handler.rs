@@ -183,17 +183,17 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         (StatusCode::BAD_REQUEST, "Invalid date format".to_string())
     })?;
 
-    // let file_in_git_dir = format!("_posts/{}-{}.md", form.date, safe_file_name);
+    let file_in_git_dir = format!("_posts/{}-{}.md", form.date, safe_file_name);
 
-    // git::commit_and_push(repository, &token, &file_in_git_dir, &form.title)
-    //     .await
-    //     .map_err(|err| {
-    //         error!("Failed to commit and push: {}", err);
-    //         (
-    //             StatusCode::INTERNAL_SERVER_ERROR,
-    //             "Failed to commit and push".to_string(),
-    //         )
-    //     })?;
+    git::commit_and_push(repository, &github_token, &file_in_git_dir, &form.title)
+        .await
+        .map_err(|err| {
+            error!("Failed to commit and push: {}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to commit and push".to_string(),
+            )
+        })?;
 
     let post_url = format!(
         "https://kyrremann.no/plog/{}/{:02}/{}",
@@ -203,20 +203,20 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     );
     info!("Post URL: {}", post_url);
 
-    // brevo::post_campaign(
-    //     form.title.clone(),
-    //     form.main.description.clone(),
-    //     form.main.image_url.clone(),
-    //     post_url.clone(),
-    // )
-    // .await
-    // .map_err(|err| {
-    //     error!("Failed to post campaign: {}", err);
-    //     (
-    //         StatusCode::INTERNAL_SERVER_ERROR,
-    //         "Failed to post campaign".to_string(),
-    //     )
-    // })?;
+    brevo::post_campaign(
+        form.title.clone(),
+        form.main.description.clone(),
+        form.main.image_url.clone(),
+        post_url.clone(),
+    )
+    .await
+    .map_err(|err| {
+        error!("Failed to post campaign: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to post campaign".to_string(),
+        )
+    })?;
 
     Ok(Html(
         "Form and multipart data processed successfully!".to_string(),
