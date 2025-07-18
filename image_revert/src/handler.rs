@@ -1,11 +1,52 @@
 use axum::body::{Body, to_bytes};
-use axum::http::Request;
+use axum::http::{self, Request, StatusCode};
+use axum::response::Response;
 use log::{error, info};
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use std::str;
 
-pub async fn handle(req: Request<Body>) {
+pub fn with_permissive_cors() -> http::response::Builder {
+    Response::builder()
+        .header(
+            "Access-Control-Allow-Headers",
+            "content-type, x-auth-token, authorization, origin, accept",
+        )
+        .header("Access-Control-Allow-Methods", "OPTIONS, DELETE")
+        .header("Access-Control-Allow-Origin", "http://localhost:4000")
+}
+
+pub async fn handle(request: Request<Body>) -> Response<Body> {
+    env_logger::try_init().unwrap_or_else(|_| {
+        eprintln!("Failed to initialize logger, using default settings");
+    });
+
+    // Check if this is an OPTIONS request
+    if request.method() == http::Method::OPTIONS {
+        return with_permissive_cors()
+            .status(StatusCode::OK)
+            .body(Body::empty())
+            .unwrap();
+    }
+
+    let token = std::env::var("TOKEN")
+        .map_err(|_| "TOKEN not set".to_string())
+        .unwrap();
+
+    request
+        .headers()
+        .get("x-auth-token")
+        .and_then(|v| v.to_str().ok())
+        .filter(|&header_token| header_token == token)
+        .ok_or_else(|| {
+            error!("Invalid or missing x-auth-token header");
+            with_permissive_cors()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(Body::from("Unauthorized"))
+                .unwrap()
+        })
+        .unwrap();
+
     let bucket_name = "kyrremann-plog";
     let region_name = "nl-ams".to_string();
     let endpoint = "https://s3.nl-ams.scw.cloud".to_string();
@@ -13,6 +54,7 @@ pub async fn handle(req: Request<Body>) {
         region: region_name,
         endpoint,
     };
+
     let credentials = Credentials::new(None, None, None, None, None)
         .map_err(|e| {
             error!("Failed to create credentials: {}", e);
@@ -25,7 +67,7 @@ pub async fn handle(req: Request<Body>) {
         .unwrap();
 
     // Extract the body as a string with a limit
-    let body_bytes = to_bytes(req.into_body(), 65536) // 64 KB limit
+    let body_bytes = to_bytes(request.into_body(), 65536) // 64 KB limit
         .await
         .map_err(|e| {
             error!("Failed to read request body: {}", e);
@@ -47,4 +89,9 @@ pub async fn handle(req: Request<Body>) {
     });
 
     info!("Deleted {} successfully", path);
+
+    with_permissive_cors()
+        .status(StatusCode::OK)
+        .body(Body::empty())
+        .unwrap()
 }

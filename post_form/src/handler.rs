@@ -126,8 +126,8 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         }
     }
 
-    if token.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Token is required".to_string()));
+    if token.is_empty() || token != std::env::var("TOKEN").unwrap_or_default() {
+        return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
     }
 
     let repository = git::clone_repository(&token).await.map_err(|err| {

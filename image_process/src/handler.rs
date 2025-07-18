@@ -1,5 +1,6 @@
 use axum::body::Body;
-use axum::extract::Multipart;
+use axum::extract::{FromRequest, Multipart};
+use axum::http::Request;
 use axum::http::{self, StatusCode};
 use axum::response::Response;
 use chrono::{Datelike, Local, NaiveDate};
@@ -9,16 +10,67 @@ use s3::{Bucket, Region};
 
 pub fn with_permissive_cors() -> http::response::Builder {
     Response::builder()
-        .header("Access-Control-Allow-Headers", "*")
-        .header("Access-Control-Allow-Methods", "*")
-        .header("Access-Control-Allow-Origin", "*")
+        .header(
+            "Access-Control-Allow-Headers",
+            "content-type, x-auth-token, authorization, origin, accept",
+        )
+        .header("Access-Control-Allow-Methods", "OPTIONS, POST")
+        .header("Access-Control-Allow-Origin", "http://localhost:4000")
 }
 
-pub async fn handle(mut multipart: Multipart) -> Response<Body> {
+pub async fn handle(request: Request<Body>) -> Response<Body> {
     env_logger::try_init().unwrap_or_else(|_| {
         eprintln!("Failed to initialize logger, using default settings");
     });
 
+    // Check if this is an OPTIONS request
+    if request.method() == http::Method::OPTIONS {
+        return with_permissive_cors()
+            .status(StatusCode::OK)
+            .body(Body::empty())
+            .unwrap();
+    }
+
+    let token = std::env::var("TOKEN")
+        .map_err(|_| "TOKEN not set".to_string())
+        .unwrap();
+
+    request
+        .headers()
+        .get("x-auth-token")
+        .and_then(|v| v.to_str().ok())
+        .filter(|&header_token| header_token == token)
+        .ok_or_else(|| {
+            error!("Invalid or missing x-auth-token header");
+            with_permissive_cors()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(Body::from("Unauthorized"))
+                .unwrap()
+        })
+        .unwrap();
+
+    // For POST requests, extract multipart data
+    let (parts, body) = request.into_parts();
+    let body_stream = axum::body::Body::new(body);
+
+    // Reconstruct the request for multipart extraction
+    let request = Request::from_parts(parts, body_stream);
+
+    // Use Axum's built-in multipart extractor
+    match Multipart::from_request(request, &()).await {
+        Ok(multipart) => process_multipart(multipart).await,
+        Err(err) => {
+            error!("Failed to extract multipart: {}", err);
+            with_permissive_cors()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Body::from("Failed to extract multipart data"))
+                .unwrap()
+        }
+    }
+}
+
+// Move your existing multipart processing logic to this function
+async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
     info!("Payload received...");
     let mut path = "No path found".to_string();
 
