@@ -1120,6 +1120,7 @@ name = "image_revert"
 version = "1.0.0"
 dependencies = [
  "axum",
+ "env_logger",
  "log",
  "rust-s3",
 ]

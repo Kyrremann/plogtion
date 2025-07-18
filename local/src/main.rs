@@ -77,8 +77,8 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
     }
 }
 
-async fn image_handler(multipart: Multipart) -> Response<Body> {
-    image_process::handle(multipart).await
+async fn image_handler(req: Request<Body>) -> Response<Body> {
+    image_process::handle(req).await
 }
 
 async fn delete_image_handler(req: Request<Body>) {
