@@ -128,7 +128,14 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
     }
 
-    let repository = git::clone_repository(&token).await.map_err(|err| {
+    let github_token = std::env::var("GITHUB_TOKEN").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "GITHUB_TOKEN not set".to_string(),
+        )
+    })?;
+
+    let repository = git::clone_repository(&github_token).await.map_err(|err| {
         error!("Failed to clone repository: {}", err);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
