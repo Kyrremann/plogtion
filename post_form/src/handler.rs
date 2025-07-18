@@ -6,11 +6,9 @@ use crate::tera::UploadForm;
 use axum::extract::Multipart;
 use axum::http::StatusCode;
 use axum::response::Html;
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{Datelike, NaiveDate};
 use log::{error, info};
 use serde::Deserialize;
-use std::path::Path;
-use std::{fs::File, io::Write};
 
 const DEFAULT_IMAGE_URL: &str = "https://kyrremann-plog.s3.nl-ams.scw.cloud";
 
