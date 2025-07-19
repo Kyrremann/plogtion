@@ -78,6 +78,10 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
             "strava" => form.strava = field.text().await.unwrap_or_default(),
             "date" => form.date = field.text().await.unwrap_or_default(),
             "categories" => form.categories = field.text().await.unwrap_or_default(),
+            "feature_image" => {
+                let file_name = field.text().await.unwrap_or_default();
+                form.feature.file_name = file_name.clone();
+            }
             name if name.ends_with("_alt_text") => {
                 let text = field.text().await.unwrap_or_default();
                 let key = name.strip_suffix("_alt_text").unwrap_or_default();
@@ -143,19 +147,18 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         )
     })?;
 
-    let mut keys: Vec<_> = form.images.keys().cloned().collect();
-    keys.sort_by_key(|k| k.to_lowercase());
-    let featured_image_key = keys.first().cloned().unwrap_or_default();
+    if let Some(image) = form.images.get(&form.feature.file_name) {
+        form.feature.image_url = image.image_url.clone();
+        form.feature.description = image.description.clone(); // For the email campaign
+    } else {
+        info!("No featured image specified, selecting the first available image");
+        let mut keys: Vec<_> = form.images.keys().cloned().collect();
+        keys.sort_by_key(|k| k.to_lowercase());
+        let featured_image_key = keys.first().cloned().unwrap_or_default();
 
-    if let Some(image) = form.images.get(&featured_image_key) {
+        let image = form.images.get(&form.feature.file_name).unwrap();
         form.feature = image.clone();
         form.feature.file_name = featured_image_key.clone();
-    } else {
-        error!("No featured image specified or found");
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "No featured image specified or found".to_string(),
-        ));
     }
 
     if let Err(err) = form.validate() {
