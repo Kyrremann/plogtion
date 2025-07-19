@@ -156,7 +156,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         keys.sort_by_key(|k| k.to_lowercase());
         let featured_image_key = keys.first().cloned().unwrap_or_default();
 
-        let image = form.images.get(&form.feature.file_name).unwrap();
+        let image = form.images.get(&featured_image_key).unwrap();
         form.feature = image.clone();
         form.feature.file_name = featured_image_key.clone();
     }
