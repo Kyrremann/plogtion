@@ -22,11 +22,10 @@ pub struct UploadForm {
     pub categories: String,
     pub strava: String,
     pub date: String,
-    pub main: ImageMetadata,
+    pub feature: ImageMetadata,
     pub images: HashMap<String, ImageMetadata>,
 }
 
-// I want the validate function to be a function implemented on the UploadForm struct
 impl UploadForm {
     pub fn validate(&self) -> Result<(), String> {
         if self.title.is_empty() {
@@ -38,11 +37,11 @@ impl UploadForm {
         if self.date.is_empty() {
             return Err("Date cannot be empty".to_string());
         }
-        if self.main.image_url.is_empty() {
-            return Err("Main image URL cannot be empty".to_string());
+        if self.feature.image_url.is_empty() {
+            return Err("Missing featured image".to_string());
         }
-        if self.main.description.is_empty() {
-            return Err("Main image description cannot be empty".to_string());
+        if self.feature.description.is_empty() {
+            return Err("Featured image description cannot be empty".to_string());
         }
         Ok(())
     }
@@ -54,24 +53,15 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
 title: "{{ form.title }}"
 date: "{{ form.date }}"
 categories: "{{ form.categories }}"
-main:
-  image: "{{ form.main.image_url }}"
-  alt_text: "{{ form.main.alt_text }}"
-  {%- if form.main.caption %}
-  caption: "{{ form.main.caption }}"
-  {% endif %}
-  {%- if form.main.location %}
-  location: "{{ form.main.location }}"
-  coordinates: "{{ form.main.coordinates }}"
-  coordinates_url: "https://www.google.com/maps/place/{{ form.main.coordinates }}"
+feature:
+  image: "{{ form.feature.image_url }}"
+  {%- if form.feature.alt_text %}
+  alt_text: "{{ form.feature.alt_text }}"
   {% endif %}
 {%- if form.strava %}strava: "{{ form.strava }}"{% endif %}
 ---
 
-{{ form.main.description }}
-
 {% for key, metadata in form.images %}
-{%- if key == form.main.file_name %}{% continue %}{% endif -%}
 ![{{ metadata.alt_text }}]({{ metadata.image_url }})
 {%- if metadata.caption %}
 *{%- if metadata.location %}[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {% endif %}{{ metadata.caption }}*

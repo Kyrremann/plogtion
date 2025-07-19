@@ -145,16 +145,16 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
 
     let mut keys: Vec<_> = form.images.keys().cloned().collect();
     keys.sort_by_key(|k| k.to_lowercase());
-    let first_image = keys.first().cloned().unwrap_or_default();
+    let featured_image_key = keys.first().cloned().unwrap_or_default();
 
-    if let Some(first) = form.images.get(&first_image) {
-        form.main = first.clone();
-        form.main.file_name = first_image.clone();
+    if let Some(image) = form.images.get(&featured_image_key) {
+        form.feature = image.clone();
+        form.feature.file_name = featured_image_key.clone();
     } else {
-        error!("No main image specified or found");
+        error!("No featured image specified or found");
         return Err((
             StatusCode::BAD_REQUEST,
-            "No main image specified or found".to_string(),
+            "No featured image specified or found".to_string(),
         ));
     }
 
@@ -167,8 +167,8 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     }
 
     info!(
-        "Title: {}, Categories: {}, Strava: {}, Date: {}, Main: {:?}, Images: {:?}",
-        form.title, form.categories, form.strava, form.date, form.main, form.images,
+        "Title: {}, Categories: {}, Strava: {}, Date: {}, Feature: {:?}, Images: {:?}",
+        form.title, form.categories, form.strava, form.date, form.feature, form.images,
     );
     let safe_file_name = tera::create_post(&form).map_err(|err| {
         error!("Failed to create post: {}", err);
@@ -205,8 +205,8 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
 
     brevo::post_campaign(
         form.title.clone(),
-        form.main.description.clone(),
-        form.main.image_url.clone(),
+        form.feature.description.clone(),
+        form.feature.image_url.clone(),
         post_url.clone(),
     )
     .await
