@@ -8,46 +8,65 @@ use log::{error, info};
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 
-pub fn with_permissive_cors() -> http::response::Builder {
-    Response::builder()
+pub fn with_permissive_cors(origin: String) -> http::response::Builder {
+    let response = Response::builder()
         .header(
             "Access-Control-Allow-Headers",
             "content-type, x-auth-token, authorization, origin, accept",
         )
-        .header("Access-Control-Allow-Methods", "OPTIONS, POST")
-        .header("Access-Control-Allow-Origin", "http://localhost:4000")
+        .header("Access-Control-Allow-Methods", "OPTIONS, POST");
+
+    if origin == "http://localhost:4000" || origin == "https://kyrremann.no" {
+        return response.header("Access-Control-Allow-Origin", origin);
+    }
+
+    return response;
 }
 
 pub async fn handle(request: Request<Body>) -> Response<Body> {
-    env_logger::try_init().unwrap_or_else(|_| {
-        eprintln!("Failed to initialize logger, using default settings");
-    });
+    if let Err(e) = env_logger::try_init() {
+        error!("Failed to initialize logger: {}", e);
+    }
+
+    let origin = match request.headers().get("origin").and_then(|v| v.to_str().ok()) {
+        Some(value) => value.to_string(),
+        None => {
+            error!("Origin header missing or invalid");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Body::from("Bad Request"))
+                .unwrap();
+        }
+    };
+    info!("Request from origin: {}", origin);
+    let response = with_permissive_cors(origin.clone());
 
     // Check if this is an OPTIONS request
     if request.method() == http::Method::OPTIONS {
-        return with_permissive_cors()
-            .status(StatusCode::OK)
-            .body(Body::empty())
-            .unwrap();
+        return response.status(StatusCode::OK).body(Body::empty()).unwrap();
     }
 
-    let token = std::env::var("TOKEN")
-        .map_err(|_| "TOKEN not set".to_string())
-        .unwrap();
+    let token = match std::env::var("TOKEN") {
+        Ok(value) => value,
+        Err(_) => {
+            error!("TOKEN not set");
+            return response
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Internal Server Error"))
+                .unwrap();
+        }
+    };
 
-    request
-        .headers()
-        .get("x-auth-token")
-        .and_then(|v| v.to_str().ok())
-        .filter(|&header_token| header_token == token)
-        .ok_or_else(|| {
+    match request.headers().get("x-auth-token").and_then(|v| v.to_str().ok()) {
+        Some(header_token) if header_token == token => {}
+        _ => {
             error!("Invalid or missing x-auth-token header");
-            with_permissive_cors()
+            return response
                 .status(StatusCode::UNAUTHORIZED)
                 .body(Body::from("Unauthorized"))
-                .unwrap()
-        })
-        .unwrap();
+                .unwrap();
+        }
+    }
 
     // For POST requests, extract multipart data
     let (parts, body) = request.into_parts();
@@ -58,10 +77,10 @@ pub async fn handle(request: Request<Body>) -> Response<Body> {
 
     // Use Axum's built-in multipart extractor
     match Multipart::from_request(request, &()).await {
-        Ok(multipart) => process_multipart(multipart).await,
+        Ok(multipart) => process_multipart(with_permissive_cors(origin), multipart).await,
         Err(err) => {
             error!("Failed to extract multipart: {}", err);
-            with_permissive_cors()
+            with_permissive_cors(origin)
                 .status(StatusCode::BAD_REQUEST)
                 .body(Body::from("Failed to extract multipart data"))
                 .unwrap()
@@ -70,7 +89,10 @@ pub async fn handle(request: Request<Body>) -> Response<Body> {
 }
 
 // Move your existing multipart processing logic to this function
-async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
+async fn process_multipart(
+    response: http::response::Builder,
+    mut multipart: Multipart,
+) -> Response<Body> {
     info!("Payload received...");
     let mut path = "No path found".to_string();
 
@@ -110,7 +132,7 @@ async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
                             upload_image(path.as_str(), content_type.as_str(), data.to_vec()).await
                         {
                             error!("Failed to upload image: {}", e);
-                            return with_permissive_cors()
+                            return response
                                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                                 .body(Body::from(format!("Failed to upload image: {}", e)))
                                 .unwrap();
@@ -118,7 +140,7 @@ async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
                     }
                     _ => {
                         error!("Unexpected field name: {}", name);
-                        return with_permissive_cors()
+                        return response
                             .status(StatusCode::BAD_REQUEST)
                             .body(Body::from("Unexpected field name"))
                             .unwrap();
@@ -127,7 +149,7 @@ async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
             }
             Err(err) => {
                 error!("Failed to read multipart field: {}", err);
-                return with_permissive_cors()
+                return response
                     .status(StatusCode::BAD_REQUEST)
                     .body(Body::from("Failed to read multipart field"))
                     .unwrap();
@@ -135,7 +157,7 @@ async fn process_multipart(mut multipart: Multipart) -> Response<Body> {
         }
     }
 
-    with_permissive_cors()
+    response
         .status(StatusCode::OK)
         .header("Content-Type", "text/plain")
         .body(Body::from(path))
