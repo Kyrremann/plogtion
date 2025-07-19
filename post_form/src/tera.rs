@@ -48,6 +48,25 @@ impl UploadForm {
 }
 
 pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
+    let (file_name_safe_title, rendered) = render(upload_form)?;
+
+    let file_name = format!(
+        "plog/_posts/{}-{}.md",
+        upload_form.date, file_name_safe_title
+    );
+
+    File::create(&file_name)
+        .and_then(|mut file| file.write_all(rendered.trim_end().as_bytes()))
+        .map_err(|err| {
+            error!("Failed to write rendered content to file: {}", err);
+            "File writing failed".to_string()
+        })?;
+
+    info!("Post created successfully: {}", file_name);
+    Ok(file_name_safe_title)
+}
+
+fn render(upload_form: &UploadForm) -> Result<(String, String), String> {
     let mut tera = Tera::default();
     tera.add_raw_template("post.md", r##"---
 title: "{{ form.title }}"
@@ -55,10 +74,7 @@ date: "{{ form.date }}"
 categories: "{{ form.categories }}"
 feature:
   image: "{{ form.feature.image_url }}"
-  {%- if form.feature.alt_text %}
-  alt_text: "{{ form.feature.alt_text }}"
-  {% endif %}
-{%- if form.strava %}strava: "{{ form.strava }}"{% endif %}
+{% if form.strava %}strava: "{{ form.strava }}"{% endif %}
 ---
 
 {% for key, metadata in form.images %}
@@ -84,23 +100,7 @@ feature:
     })?;
 
     let file_name_safe_title = create_file_name_safe_title(&upload_form.title);
-
-    let file_name = format!(
-        "plog/_posts/{}-{}.md",
-        upload_form.date, file_name_safe_title
-    );
-
-    info!("Content to be written: {}", rendered.trim_end());
-
-    File::create(&file_name)
-        .and_then(|mut file| file.write_all(rendered.trim_end().as_bytes()))
-        .map_err(|err| {
-            error!("Failed to write rendered content to file: {}", err);
-            "File writing failed".to_string()
-        })?;
-
-    info!("Post created successfully: {}", file_name);
-    Ok(file_name_safe_title)
+    Ok((file_name_safe_title, rendered))
 }
 
 fn create_file_name_safe_title(title: &str) -> String {
@@ -125,6 +125,60 @@ pub fn trim_whitespace(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_render_post() {
+        let upload_form = UploadForm {
+            title: "Test Post".to_string(),
+            categories: "test, example".to_string(),
+            strava: "123456789".to_string(),
+            date: "2023-10-01".to_string(),
+            feature: ImageMetadata {
+                image_url: "https://example.com/image.jpg".to_string(),
+                ..Default::default()
+            },
+            images: HashMap::from([
+                (
+                    "key1".to_string(),
+                    ImageMetadata {
+                        image_url: "https://example.com/image1.jpg".to_string(),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "key2".to_string(),
+                    ImageMetadata {
+                        image_url: "https://example.com/image2.jpg".to_string(),
+                        ..Default::default()
+                    },
+                ),
+            ]),
+        };
+
+        let result = render(&upload_form);
+        assert!(result.is_ok());
+        let (file_name_safe_title, rendered) = result.unwrap();
+        assert_eq!(file_name_safe_title, "test-post");
+        println!("{}", rendered);
+        assert_eq!(
+            rendered,
+            r##"---
+title: "Test Post"
+date: "2023-10-01"
+categories: "test, example"
+feature:
+  image: "https://example.com/image.jpg"
+strava: "123456789"
+---
+
+
+![](https://example.com/image1.jpg)
+
+![](https://example.com/image2.jpg)
+"##
+        );
+    }
 
     #[test]
     fn test_create_file_name_safe_title() {
