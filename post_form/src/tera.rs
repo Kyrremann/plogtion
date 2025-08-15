@@ -40,9 +40,6 @@ impl UploadForm {
         if self.feature.image_url.is_empty() {
             return Err("Missing featured image".to_string());
         }
-        if self.feature.description.is_empty() {
-            return Err("Featured image description cannot be empty".to_string());
-        }
         Ok(())
     }
 }
