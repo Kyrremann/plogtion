@@ -63,14 +63,14 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     let mut token = String::new();
 
     while let Some(field) = multipart.next_field().await.map_err(|err| {
-        error!("Failed to read multipart field: {}", err);
+        error!("Failed to read multipart field: {err}");
         (
             StatusCode::BAD_REQUEST,
             "Failed to read multipart field".to_string(),
         )
     })? {
         let name = field.name().unwrap_or_default().to_string();
-        info!("Processing field: {}", name);
+        info!("Processing field: {name}");
 
         match name.as_str() {
             "token" => token = field.text().await.unwrap_or_default(),
@@ -108,21 +108,21 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                         metadata.coordinates =
                             format!("{},{}", location.latitude, location.longitude);
                     }
-                    Err(err) => error!("Failed to parse location JSON: {}", err),
+                    Err(err) => error!("Failed to parse location JSON: {err}"),
                 }
             }
             "filepond" => {
                 let path = field.text().await.unwrap_or_default();
-                let file_name = path.split('/').last().unwrap_or_default().to_string();
+                let file_name = path.split('/').next_back().unwrap_or_default().to_string();
 
                 let im = form.images.entry(file_name.to_string()).or_default();
                 im.file_name = file_name.clone();
-                im.image_url = format!("{DEFAULT_IMAGE_URL}/{}", path);
+                im.image_url = format!("{DEFAULT_IMAGE_URL}/{path}");
             }
             _ => {
                 return Err((
                     StatusCode::BAD_REQUEST,
-                    format!("Unexpected field: {}", name),
+                    format!("Unexpected field: {name}"),
                 ));
             }
         }
@@ -140,7 +140,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     })?;
 
     let repository = git::clone_repository(&github_token).await.map_err(|err| {
-        error!("Failed to clone repository: {}", err);
+        error!("Failed to clone repository: {err}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Failed to clone repository".to_string(),
@@ -162,10 +162,12 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     }
 
     if let Err(err) = form.validate() {
-        error!("Form validation failed: {}", err);
+        // at this point we're safe to say form isn't malformed, right?
+        let serialized = serde_json::to_string(&form).unwrap();
+        error!("Form validation failed: {err}");
         return Err((
             StatusCode::BAD_REQUEST,
-            "Form validation failed".to_string(),
+            format!("Form validation failed: {err}\n\n{serialized}"),
         ));
     }
 
@@ -173,11 +175,12 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         "Title: {}, Categories: {}, Strava: {}, Date: {}, Feature: {:?}, Images: {:?}",
         form.title, form.categories, form.strava, form.date, form.feature, form.images,
     );
+
     let safe_file_name = tera::create_post(&form).map_err(|err| {
-        error!("Failed to create post: {}", err);
+        error!("Failed to create post: {err}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to create post".to_string(),
+            format!("Failed to create post: {err}"),
         )
     })?;
 
@@ -191,7 +194,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     git::commit_and_push(repository, &github_token, &file_in_git_dir, &form.title)
         .await
         .map_err(|err| {
-            error!("Failed to commit and push: {}", err);
+            error!("Failed to commit and push: {err}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to commit and push".to_string(),
@@ -204,7 +207,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         date.month(),
         safe_file_name
     );
-    info!("Post URL: {}", post_url);
+    info!("Post URL: {post_url}");
 
     brevo::post_campaign(
         form.title.clone(),
@@ -214,7 +217,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     )
     .await
     .map_err(|err| {
-        error!("Failed to post campaign: {}", err);
+        error!("Failed to post campaign: {err}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Failed to post campaign".to_string(),

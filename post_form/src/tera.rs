@@ -55,11 +55,11 @@ pub fn create_post(upload_form: &UploadForm) -> Result<String, String> {
     File::create(&file_name)
         .and_then(|mut file| file.write_all(rendered.trim_end().as_bytes()))
         .map_err(|err| {
-            error!("Failed to write rendered content to file: {}", err);
+            error!("Failed to write rendered content to file: {err}");
             "File writing failed".to_string()
         })?;
 
-    info!("Post created successfully: {}", file_name);
+    info!("Post created successfully: {file_name}");
     Ok(file_name_safe_title)
 }
 
@@ -84,7 +84,7 @@ feature:
 {% endif %}
 {% endfor -%}
 "##).map_err(|err| {
-        error!("Failed to add template: {}", err);
+        error!("Failed to add template: {err}");
         "Template initialization failed".to_string()
     })?;
 
@@ -92,7 +92,7 @@ feature:
     context.insert("form", upload_form);
 
     let rendered = tera.render("post.md", &context).map_err(|err| {
-        error!("Failed to render template: {}", err);
+        error!("Failed to render template: {err}");
         "Template rendering failed".to_string()
     })?;
 

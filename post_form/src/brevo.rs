@@ -67,7 +67,7 @@ pub async fn post_campaign(
         .json(&campaign)
         .send()
         .await
-        .map_err(|err| format!("Request failed: {}", err))?;
+        .map_err(|err| format!("Request failed: {err}"))?;
 
     if response.status().is_success() {
         info!("Campaign posted successfully!");
