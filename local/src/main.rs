@@ -67,13 +67,11 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
   </head>
   <body>
     <h1>Upload Failed</h1>
-    <p>Error ({}): {}</p>
+    <p>Error ({status_code}): {message}</p>
     <a href="/">Go back to the homepage</a>
   </body>
 </html>
-"#,
-            status_code, message
-        )),
+"#)),
     }
 }
 
