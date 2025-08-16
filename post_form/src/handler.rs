@@ -74,7 +74,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
 
         match name.as_str() {
             "token" => token = field.text().await.unwrap_or_default(),
-            "title" => form.title = field.text().await.unwrap_or_default(),
+            "title" => form.title = field.text().await.unwrap_or_default().trim(),
             "strava" => form.strava = field.text().await.unwrap_or_default(),
             "date" => form.date = field.text().await.unwrap_or_default(),
             "categories" => form.categories = field.text().await.unwrap_or_default(),
@@ -83,12 +83,12 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 form.feature.file_name = file_name.clone();
             }
             name if name.ends_with("_alt_text") => {
-                let text = field.text().await.unwrap_or_default();
+                let text = field.text().await.unwrap_or_default().trim();
                 let key = name.strip_suffix("_alt_text").unwrap_or_default();
                 form.images.entry(key.to_string()).or_default().alt_text = text;
             }
             name if name.ends_with("_caption") => {
-                let text = field.text().await.unwrap_or_default();
+                let text = field.text().await.unwrap_or_default().trim();
                 let key = name.strip_suffix("_caption").unwrap_or_default();
                 form.images.entry(key.to_string()).or_default().caption = text;
             }
