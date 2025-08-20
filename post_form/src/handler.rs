@@ -36,7 +36,7 @@ impl Location {
         if !self.geocoding.suburb.is_empty() {
             parts.push(self.geocoding.suburb.clone());
         }
-        if !self.geocoding.city.is_empty() && parts.contains(&self.geocoding.city) {
+        if !self.geocoding.city.is_empty() && !parts.contains(&self.geocoding.city) {
             parts.push(self.geocoding.city.clone());
         }
         if !self.geocoding.municipality.is_empty() && !parts.contains(&self.geocoding.municipality)
