@@ -40,20 +40,19 @@ impl Location {
         if !self.geocoding.suburb.is_empty() {
             parts.push(self.geocoding.suburb.clone());
         }
-        if !self.geocoding.town.is_empty() && !parts.contains(&self.geocoding.town) {
+        if !self.geocoding.town.is_empty() {
             parts.push(self.geocoding.city.clone());
         }
-        if !self.geocoding.city.is_empty() && !parts.contains(&self.geocoding.city) {
+        if !self.geocoding.city.is_empty() {
             parts.push(self.geocoding.city.clone());
         }
-        if !self.geocoding.municipality.is_empty() && !parts.contains(&self.geocoding.municipality)
-        {
+        if !self.geocoding.municipality.is_empty() {
             parts.push(self.geocoding.municipality.clone());
         }
-        if !self.geocoding.province.is_empty() && !parts.contains(&self.geocoding.province) {
+        if !self.geocoding.province.is_empty() {
             parts.push(self.geocoding.city.clone());
         }
-        if !self.geocoding.country.is_empty() && !parts.contains(&self.geocoding.country) {
+        if !self.geocoding.country.is_empty() {
             parts.push(self.geocoding.country.clone());
         }
 
