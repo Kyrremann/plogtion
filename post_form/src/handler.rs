@@ -81,34 +81,36 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         let name = field.name().unwrap_or_default().to_string();
         info!("Processing field: {name}");
 
+        let value = field.text().await.unwrap_or_default();
+
         match name.as_str() {
-            "token" => token = field.text().await.unwrap_or_default(),
-            "title" => form.title = field.text().await.unwrap_or_default().trim(),
-            "strava" => form.strava = field.text().await.unwrap_or_default(),
-            "date" => form.date = field.text().await.unwrap_or_default(),
-            "categories" => form.categories = field.text().await.unwrap_or_default(),
+            "token" => token = value,
+            "title" => form.title = value.trim().to_string(),
+            "strava" => form.strava = value,
+            "date" => form.date = value,
+            "categories" => form.categories = value,
             "feature_image" => {
-                let file_name = field.text().await.unwrap_or_default();
+                let file_name = value;
                 form.feature.file_name = file_name.clone();
             }
             name if name.ends_with("_alt_text") => {
-                let text = field.text().await.unwrap_or_default().trim();
+                let text = value.trim();
                 let key = name.strip_suffix("_alt_text").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().alt_text = text;
+                form.images.entry(key.to_string()).or_default().alt_text = text.to_string();
             }
             name if name.ends_with("_caption") => {
-                let text = field.text().await.unwrap_or_default().trim();
+                let text = value.trim();
                 let key = name.strip_suffix("_caption").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().caption = text;
+                form.images.entry(key.to_string()).or_default().caption = text.to_string();
             }
             name if name.ends_with("_description") => {
-                let text = field.text().await.unwrap_or_default();
+                let text = value;
                 let key = name.strip_suffix("_description").unwrap_or_default();
                 form.images.entry(key.to_string()).or_default().description =
                     text.replace("\r\n", "\n");
             }
             name if name.ends_with("_location") => {
-                let text = field.text().await.unwrap_or_default();
+                let text = value;
                 let key = name.strip_suffix("_location").unwrap_or_default();
                 match serde_json::from_str::<Location>(&text) {
                     Ok(location) => {
@@ -121,7 +123,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 }
             }
             "filepond" => {
-                let path = field.text().await.unwrap_or_default();
+                let path = value;
                 let file_name = path.split('/').next_back().unwrap_or_default().to_string();
 
                 let im = form.images.entry(file_name.to_string()).or_default();
