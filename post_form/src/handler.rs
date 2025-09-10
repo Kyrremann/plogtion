@@ -17,9 +17,13 @@ pub struct Geocoding {
     #[serde(default)]
     pub suburb: String,
     #[serde(default)]
+    pub town: String,
+    #[serde(default)]
     pub city: String,
     #[serde(default)]
     pub municipality: String,
+    #[serde(default)]
+    pub province: String,
     pub country: String,
 }
 
