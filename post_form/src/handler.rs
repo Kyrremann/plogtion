@@ -41,7 +41,7 @@ impl Location {
             parts.push(self.geocoding.suburb.clone());
         }
         if !self.geocoding.town.is_empty() {
-            parts.push(self.geocoding.city.clone());
+            parts.push(self.geocoding.town.clone());
         }
         if !self.geocoding.city.is_empty() {
             parts.push(self.geocoding.city.clone());
@@ -50,7 +50,7 @@ impl Location {
             parts.push(self.geocoding.municipality.clone());
         }
         if !self.geocoding.province.is_empty() {
-            parts.push(self.geocoding.city.clone());
+            parts.push(self.geocoding.province.clone());
         }
         if !self.geocoding.country.is_empty() {
             parts.push(self.geocoding.country.clone());
