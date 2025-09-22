@@ -8,7 +8,7 @@ path = "src/handler.rs"
 
 [dependencies]
 axum = { version = "0.8.4", features = ["multipart"] }
-rust-s3 = "0.35.1"
+rust-s3 = "0.37.0"
 chrono = "0.4.42"
 log = "0.4.28"
 env_logger = "0.11.8"
