@@ -9,5 +9,5 @@ path = "src/handler.rs"
 [dependencies]
 rust-s3 = "0.37.1"
 log = "0.4.29"
-axum = "0.8.7"
+axum = "0.8.8"
 env_logger = "0.11.8"
