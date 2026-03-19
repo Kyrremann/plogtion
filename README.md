@@ -4,8 +4,17 @@ A collection of simple functions that takes a form, uploads the images to a buck
 
 They are each deployed as serverless functions at Scaleway.
 
-## Deployment
+## Development
+
+Requires [mise](https://mise.jdx.dev/) for toolchain management.
 
 ```
-./zip_projects.sh
+mise install
+cargo test --workspace
+```
+
+Run locally with:
+
+```
+cd local && cargo run
 ```
