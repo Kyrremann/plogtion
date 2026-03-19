@@ -67,31 +67,47 @@ jobs:
         env:
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
         run: |
+          set -euo pipefail
+
           FUNCTION_ID="${{ matrix.function_id }}"
           ZIP_FILE="${{ matrix.name }}.zip"
           CONTENT_LENGTH=$(stat -c%s "$ZIP_FILE")
+          API_BASE="https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}"
 
           # Get presigned upload URL
-          UPLOAD_URL=$(curl -sf \
-            "https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}/upload-url?content_length=${CONTENT_LENGTH}" \
-            -H "X-Auth-Token: ${SCW_SECRET_KEY}" | jq -r '.url')
+          RESPONSE=$(curl -sS -w "\n%{http_code}" \
+            "${API_BASE}/upload-url?content_length=${CONTENT_LENGTH}" \
+            -H "X-Auth-Token: ${SCW_SECRET_KEY}")
 
-          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
-            echo "::error::Failed to get upload URL for ${{ matrix.name }}"
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Upload URL request failed (HTTP ${HTTP_CODE}): ${BODY}"
             exit 1
           fi
 
+          UPLOAD_URL=$(echo "$BODY" | jq -r '.url')
+
           # Upload zip
-          curl -sf -X PUT "$UPLOAD_URL" \
+          curl -sSf -X PUT "$UPLOAD_URL" \
             --upload-file "$ZIP_FILE" \
             -H "Content-Type: application/octet-stream"
 
           echo "✓ Uploaded $ZIP_FILE"
 
           # Trigger deployment
-          DEPLOY_STATUS=$(curl -sf -X POST \
-            "https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}/deploy" \
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
+            "${API_BASE}/deploy" \
             -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
-            -H "Content-Type: application/json" | jq -r '.status')
+            -H "Content-Type: application/json")
 
-          echo "✓ Deployed ${{ matrix.name }} (status: ${DEPLOY_STATUS})"
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Deploy request failed (HTTP ${HTTP_CODE}): ${BODY}"
+            exit 1
+          fi
+
+          echo "✓ Deployed ${{ matrix.name }} (status: $(echo "$BODY" | jq -r '.status'))"
