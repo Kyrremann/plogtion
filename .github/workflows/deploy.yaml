@@ -1,0 +1,97 @@
+name: Deploy Scaleway Functions
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+env:
+  SCW_REGION: nl-ams
+
+jobs:
+  detect-changes:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      image_process: ${{ steps.changes.outputs.image_process }}
+      image_revert: ${{ steps.changes.outputs.image_revert }}
+      post_form: ${{ steps.changes.outputs.post_form }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            image_process:
+              - 'image_process/**'
+            image_revert:
+              - 'image_revert/**'
+            post_form:
+              - 'post_form/**'
+
+  deploy:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.image_process == 'true' ||
+      needs.detect-changes.outputs.image_revert == 'true' ||
+      needs.detect-changes.outputs.post_form == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: image_process
+            function_id: f7881fc0-2749-430d-a38b-6ba34d84afb2
+            changed: ${{ needs.detect-changes.outputs.image_process }}
+          - name: image_revert
+            function_id: f28e8c4b-27d3-4303-860b-d74085b19842
+            changed: ${{ needs.detect-changes.outputs.image_revert }}
+          - name: post_form
+            function_id: 17e34739-4b76-4ea5-b535-bc1fda351f87
+            changed: ${{ needs.detect-changes.outputs.post_form }}
+    steps:
+      - if: matrix.changed == 'true'
+        uses: actions/checkout@v6
+
+      - if: matrix.changed == 'true'
+        name: Create zip
+        run: |
+          cd ${{ matrix.name }}
+          zip -r ../${{ matrix.name }}.zip Cargo.lock Cargo.toml src/
+
+      - if: matrix.changed == 'true'
+        name: Deploy to Scaleway
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+        run: |
+          FUNCTION_ID="${{ matrix.function_id }}"
+          ZIP_FILE="${{ matrix.name }}.zip"
+          CONTENT_LENGTH=$(stat -c%s "$ZIP_FILE")
+
+          # Get presigned upload URL
+          UPLOAD_URL=$(curl -sf \
+            "https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}/upload-url?content_length=${CONTENT_LENGTH}" \
+            -H "X-Auth-Token: ${SCW_SECRET_KEY}" | jq -r '.url')
+
+          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+            echo "::error::Failed to get upload URL for ${{ matrix.name }}"
+            exit 1
+          fi
+
+          # Upload zip
+          curl -sf -X PUT "$UPLOAD_URL" \
+            --upload-file "$ZIP_FILE" \
+            -H "Content-Type: application/octet-stream"
+
+          echo "✓ Uploaded $ZIP_FILE"
+
+          # Trigger deployment
+          DEPLOY_STATUS=$(curl -sf -X POST \
+            "https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}/deploy" \
+            -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
+            -H "Content-Type: application/json" | jq -r '.status')
+
+          echo "✓ Deployed ${{ matrix.name }} (status: ${DEPLOY_STATUS})"
