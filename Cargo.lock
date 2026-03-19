@@ -1056,6 +1056,7 @@ dependencies = [
  "env_logger",
  "log",
  "rust-s3",
+ "sysinfo",
 ]
 
 [[package]]
@@ -1066,6 +1067,7 @@ dependencies = [
  "env_logger",
  "log",
  "rust-s3",
+ "sysinfo",
 ]
 
 [[package]]
