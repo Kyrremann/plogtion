@@ -28,7 +28,11 @@ pub async fn handle(request: Request<Body>) -> Response<Body> {
         error!("Failed to initialize logger: {}", e);
     }
 
-    let origin = match request.headers().get("origin").and_then(|v| v.to_str().ok()) {
+    let origin = match request
+        .headers()
+        .get("origin")
+        .and_then(|v| v.to_str().ok())
+    {
         Some(value) => value.to_string(),
         None => {
             error!("Origin header missing or invalid");
@@ -57,7 +61,11 @@ pub async fn handle(request: Request<Body>) -> Response<Body> {
         }
     };
 
-    match request.headers().get("x-auth-token").and_then(|v| v.to_str().ok()) {
+    match request
+        .headers()
+        .get("x-auth-token")
+        .and_then(|v| v.to_str().ok())
+    {
         Some(header_token) if header_token == token => {}
         _ => {
             error!("Invalid or missing x-auth-token header");

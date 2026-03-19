@@ -131,10 +131,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 im.image_url = format!("{DEFAULT_IMAGE_URL}/{path}");
             }
             _ => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    format!("Unexpected field: {name}"),
-                ));
+                return Err((StatusCode::BAD_REQUEST, format!("Unexpected field: {name}")));
             }
         }
     }

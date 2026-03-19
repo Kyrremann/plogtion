@@ -71,7 +71,8 @@ async fn upload_handler(multipart: Multipart) -> Html<String> {
     <a href="/">Go back to the homepage</a>
   </body>
 </html>
-"#)),
+"#
+        )),
     }
 }
 
