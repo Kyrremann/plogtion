@@ -59,8 +59,9 @@ jobs:
       - if: matrix.changed == 'true'
         name: Create zip
         run: |
+          cp -r sysinfo-stub ${{ matrix.name }}/
           cd ${{ matrix.name }}
-          zip -r ../${{ matrix.name }}.zip Cargo.lock Cargo.toml src/
+          zip -r ../${{ matrix.name }}.zip Cargo.lock Cargo.toml src/ sysinfo-stub/
 
       - if: matrix.changed == 'true'
         name: Deploy to Scaleway
