@@ -117,7 +117,16 @@ async fn process_multipart(
                         }
 
                         info!("Processing: {}", file_name);
-                        let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
+                        let content_type = field
+                            .content_type()
+                            .unwrap_or_else(|| {
+                                if file_name.to_lowercase().ends_with(".mp4") {
+                                    "video/mp4"
+                                } else {
+                                    "image/jpeg"
+                                }
+                            })
+                            .to_string();
                         let data = field.bytes().await.unwrap_or_default();
 
                         let date_only = parse_date_from_filename(&file_name);
@@ -180,17 +189,9 @@ fn parse_date_from_filename(file_name: &str) -> NaiveDate {
         }
     }
 
-    // Strategy 2: second segment is exactly 8 digits (e.g. IMG_20250915_055422.jpg)
-    if let Some(seg) = segments.get(1) {
-        if seg.len() == 8 {
-            if let Ok(date) = NaiveDate::parse_from_str(seg, "%Y%m%d") {
-                return date;
-            }
-        }
-    }
-
-    // Strategy 3: second segment starts with 8 digits (e.g. DJI_20250910153138_0155_D.JPG)
-    if let Some(seg) = segments.get(1) {
+    // Strategy 2: scan all segments for the first one whose leading 8 chars parse as %Y%m%d
+    // Covers IMG_*, VID_*, PRO_VID_*, DJI_* etc. regardless of how many prefix segments there are
+    for seg in &segments {
         if seg.len() >= 8 {
             if let Ok(date) = NaiveDate::parse_from_str(&seg[..8], "%Y%m%d") {
                 return date;
@@ -258,6 +259,30 @@ mod tests {
     fn test_dji_prefix() {
         // DJI_20250910153138_0155_D.JPG
         assert_eq!(parse_date_from_filename("DJI_20250910153138_0155_D.JPG"), date(2025, 9, 10));
+    }
+
+    #[test]
+    fn test_plain_date_mp4() {
+        // 20260420_205613.mp4
+        assert_eq!(parse_date_from_filename("20260420_205613.mp4"), date(2026, 4, 20));
+    }
+
+    #[test]
+    fn test_vid_prefix() {
+        // VID_20250824_115547_00_092.mp4
+        assert_eq!(parse_date_from_filename("VID_20250824_115547_00_092.mp4"), date(2025, 8, 24));
+    }
+
+    #[test]
+    fn test_pro_vid_prefix() {
+        // PRO_VID_20250903_152413_00_138.mp4
+        assert_eq!(parse_date_from_filename("PRO_VID_20250903_152413_00_138.mp4"), date(2025, 9, 3));
+    }
+
+    #[test]
+    fn test_dji_mp4_prefix() {
+        // DJI_20250910110913_0137_D.MP4
+        assert_eq!(parse_date_from_filename("DJI_20250910110913_0137_D.MP4"), date(2025, 9, 10));
     }
 
     #[test]

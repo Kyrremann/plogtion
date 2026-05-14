@@ -14,6 +14,7 @@ pub struct ImageMetadata {
     pub alt_text: String,
     pub caption: String,
     pub image_url: String,
+    pub is_video: bool,
 }
 
 #[derive(Deserialize, Serialize, Default)]
@@ -75,12 +76,21 @@ feature:
 ---
 
 {% for key, metadata in form.images %}
+{% if metadata.is_video %}
+<video width="640" preload="auto" controls src="{{ metadata.image_url }}" type="video/mp4">
+	Your browser does not support HTML5 video.
+</video>
+{%- if metadata.caption %}
+*{{ metadata.caption }}*
+{% endif %}
+{% else %}
 ![{{ metadata.alt_text }}]({{ metadata.image_url }})
 {%- if metadata.caption %}
 *{%- if metadata.location %}[{{ metadata.location }}](https://www.google.com/maps/place/{{ metadata.coordinates }}): {% endif %}{{ metadata.caption }}*
 {% endif %}
 {%- if metadata.description %}
 {{ metadata.description }}
+{% endif %}
 {% endif %}
 {% endfor -%}
 "##).map_err(|err| {

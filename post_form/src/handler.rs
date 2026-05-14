@@ -129,6 +129,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 let im = form.images.entry(file_name.to_string()).or_default();
                 im.file_name = file_name.clone();
                 im.image_url = format!("{DEFAULT_IMAGE_URL}/{path}");
+                im.is_video = file_name.to_lowercase().ends_with(".mp4");
             }
             _ => {
                 return Err((StatusCode::BAD_REQUEST, format!("Unexpected field: {name}")));
@@ -156,11 +157,22 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
     })?;
 
     if let Some(image) = form.images.get(&form.feature.file_name) {
-        form.feature.image_url = image.image_url.clone();
-        form.feature.description = image.description.clone(); // For the email campaign
-    } else {
-        info!("No featured image specified, selecting the first available image");
-        let mut keys: Vec<_> = form.images.keys().cloned().collect();
+        if image.is_video {
+            info!("Featured file is a video, falling back to first available photo");
+        } else {
+            form.feature.image_url = image.image_url.clone();
+            form.feature.description = image.description.clone(); // For the email campaign
+        }
+    }
+
+    if form.feature.image_url.is_empty() {
+        info!("No featured image specified, selecting the first available photo");
+        let mut keys: Vec<_> = form
+            .images
+            .iter()
+            .filter(|(_, v)| !v.is_video)
+            .map(|(k, _)| k.clone())
+            .collect();
         keys.sort_by_key(|k| k.to_lowercase());
         let featured_image_key = keys.first().cloned().unwrap_or_default();
 
