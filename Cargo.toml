@@ -1,3 +1,4 @@
 [workspace]
 resolver = "3"
 members = ["image_revert", "image_process", "post_form", "local"]
+rust-version = "1.85"
