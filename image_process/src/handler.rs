@@ -120,15 +120,7 @@ async fn process_multipart(
                         let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
                         let data = field.bytes().await.unwrap_or_default();
 
-                        let date_from_name = file_name.split('_').next().unwrap_or_default();
-                        let date_only = NaiveDate::parse_from_str(date_from_name, "%Y%m%d")
-                            .unwrap_or_else(|_| {
-                                error!(
-                                    "Failed to parse date from {}: {}",
-                                    file_name, date_from_name
-                                );
-                                Local::now().date_naive()
-                            });
+                        let date_only = parse_date_from_filename(&file_name);
                         path = format!(
                             "images/{}/{:02}/{}",
                             date_only.year(),
@@ -172,6 +164,44 @@ async fn process_multipart(
         .unwrap()
 }
 
+fn parse_date_from_filename(file_name: &str) -> NaiveDate {
+    let stem = file_name
+        .rfind('.')
+        .map(|i| &file_name[..i])
+        .unwrap_or(file_name);
+    let segments: Vec<&str> = stem.split('_').collect();
+
+    // Strategy 1: first segment is exactly 8 digits (e.g. 20250815_182919.jpg)
+    if let Some(seg) = segments.first() {
+        if seg.len() == 8 {
+            if let Ok(date) = NaiveDate::parse_from_str(seg, "%Y%m%d") {
+                return date;
+            }
+        }
+    }
+
+    // Strategy 2: second segment is exactly 8 digits (e.g. IMG_20250915_055422.jpg)
+    if let Some(seg) = segments.get(1) {
+        if seg.len() == 8 {
+            if let Ok(date) = NaiveDate::parse_from_str(seg, "%Y%m%d") {
+                return date;
+            }
+        }
+    }
+
+    // Strategy 3: second segment starts with 8 digits (e.g. DJI_20250910153138_0155_D.JPG)
+    if let Some(seg) = segments.get(1) {
+        if seg.len() >= 8 {
+            if let Ok(date) = NaiveDate::parse_from_str(&seg[..8], "%Y%m%d") {
+                return date;
+            }
+        }
+    }
+
+    error!("Failed to parse date from filename: {}", file_name);
+    Local::now().date_naive()
+}
+
 async fn upload_image(path: &str, content_type: &str, image: Vec<u8>) -> Result<(), String> {
     let bucket_name = "kyrremann-plog";
     let region_name = "nl-ams".to_string();
@@ -195,4 +225,44 @@ async fn upload_image(path: &str, content_type: &str, image: Vec<u8>) -> Result<
 
     info!("Uploaded {} successfully", path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn test_plain_date_prefix() {
+        // 20250815_182919.jpg
+        assert_eq!(parse_date_from_filename("20250815_182919.jpg"), date(2025, 8, 15));
+    }
+
+    #[test]
+    fn test_img_prefix() {
+        // IMG_20250915_055422_00_266.jpg
+        assert_eq!(parse_date_from_filename("IMG_20250915_055422_00_266.jpg"), date(2025, 9, 15));
+    }
+
+    #[test]
+    fn test_img_prefix_pureshot() {
+        // IMG_20250915_055422_00_266_PureShot.jpg
+        assert_eq!(parse_date_from_filename("IMG_20250915_055422_00_266_PureShot.jpg"), date(2025, 9, 15));
+    }
+
+    #[test]
+    fn test_dji_prefix() {
+        // DJI_20250910153138_0155_D.JPG
+        assert_eq!(parse_date_from_filename("DJI_20250910153138_0155_D.JPG"), date(2025, 9, 10));
+    }
+
+    #[test]
+    fn test_unknown_falls_back_to_today() {
+        let result = parse_date_from_filename("unknown.jpg");
+        assert_eq!(result, Local::now().date_naive());
+    }
 }
