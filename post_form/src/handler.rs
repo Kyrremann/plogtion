@@ -109,8 +109,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
             name if name.ends_with("_description") => {
                 let text = value;
                 let key = name.strip_suffix("_description").unwrap_or_default();
-                images.entry(key.to_string()).or_default().description =
-                    text.replace("\r\n", "\n");
+                images.entry(key.to_string()).or_default().description = text.replace("\r\n", "\n");
             }
             name if name.ends_with("_location") => {
                 let text = value;
@@ -165,7 +164,11 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         )
     })?;
 
-    if let Some(image) = form.images.iter().find(|m| m.file_name == form.feature.file_name) {
+    if let Some(image) = form
+        .images
+        .iter()
+        .find(|m| m.file_name == form.feature.file_name)
+    {
         if image.is_video {
             info!("Featured file is a video, falling back to first available photo");
         } else {
