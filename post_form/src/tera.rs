@@ -76,11 +76,11 @@ feature:
 ---
 
 {% for key, metadata in form.images %}
-{% if metadata.is_video %}
+{%- if metadata.is_video %}
 <video width="640" preload="auto" controls src="{{ metadata.image_url }}" type="video/mp4">
 	Your browser does not support HTML5 video.
 </video>
-{%- if metadata.caption %}
+{% if metadata.caption %}
 *{{ metadata.caption }}*
 {% endif %}
 {% else %}
@@ -91,7 +91,7 @@ feature:
 {%- if metadata.description %}
 {{ metadata.description }}
 {% endif %}
-{% endif %}
+{%- endif %}
 {% endfor -%}
 "##).map_err(|err| {
         error!("Failed to add template: {err}");
