@@ -107,7 +107,7 @@ feature:
 {% endif %}
 {%- if metadata.description %}
 {{ metadata.description }}
-{% endif %}
+{%- endif %}
 {%- endif %}
 {% endfor -%}
 "##).map_err(|err| {
@@ -167,12 +167,16 @@ mod tests {
                     file_name: "20230101_120000.jpg".to_string(),
                     image_url: "https://example.com/image1.jpg".to_string(),
                     date: NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+                    caption: "hello world".to_string(),
+                    description: "some story about my life, as an intro".to_string(),
                     ..Default::default()
                 },
                 ImageMetadata {
                     file_name: "20230102_120000.jpg".to_string(),
                     image_url: "https://example.com/image2.jpg".to_string(),
                     date: NaiveDate::from_ymd_opt(2023, 1, 2).unwrap(),
+                    caption: "what a great image".to_string(),
+                    description: "this is what I did later".to_string(),
                     ..Default::default()
                 },
             ],
@@ -196,8 +200,14 @@ strava: "123456789"
 
 
 ![](https://example.com/image1.jpg)
+*hello world*
+
+some story about my life, as an intro
 
 ![](https://example.com/image2.jpg)
+*what a great image*
+
+this is what I did later
 "##
         );
     }
