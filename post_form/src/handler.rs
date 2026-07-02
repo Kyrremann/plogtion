@@ -7,8 +7,10 @@ use axum::extract::Multipart;
 use axum::http::StatusCode;
 use axum::response::Html;
 use chrono::{Datelike, NaiveDate};
+use image_process::parse_date_from_filename;
 use log::{error, info};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 const DEFAULT_IMAGE_URL: &str = "https://kyrremann-plog.s3.nl-ams.scw.cloud";
 
@@ -70,6 +72,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         ..Default::default()
     };
     let mut token = String::new();
+    let mut images: HashMap<String, crate::tera::ImageMetadata> = HashMap::new();
 
     while let Some(field) = multipart.next_field().await.map_err(|err| {
         error!("Failed to read multipart field: {err}");
@@ -96,17 +99,17 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
             name if name.ends_with("_alt_text") => {
                 let text = value.trim();
                 let key = name.strip_suffix("_alt_text").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().alt_text = text.to_string();
+                images.entry(key.to_string()).or_default().alt_text = text.to_string();
             }
             name if name.ends_with("_caption") => {
                 let text = value.trim();
                 let key = name.strip_suffix("_caption").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().caption = text.to_string();
+                images.entry(key.to_string()).or_default().caption = text.to_string();
             }
             name if name.ends_with("_description") => {
                 let text = value;
                 let key = name.strip_suffix("_description").unwrap_or_default();
-                form.images.entry(key.to_string()).or_default().description =
+                images.entry(key.to_string()).or_default().description =
                     text.replace("\r\n", "\n");
             }
             name if name.ends_with("_location") => {
@@ -114,7 +117,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 let key = name.strip_suffix("_location").unwrap_or_default();
                 match serde_json::from_str::<Location>(&text) {
                     Ok(location) => {
-                        let metadata = form.images.entry(key.to_string()).or_default();
+                        let metadata = images.entry(key.to_string()).or_default();
                         metadata.location = location.geocoding_as_string();
                         metadata.coordinates =
                             format!("{},{}", location.latitude, location.longitude);
@@ -126,16 +129,22 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
                 let path = value;
                 let file_name = path.split('/').next_back().unwrap_or_default().to_string();
 
-                let im = form.images.entry(file_name.to_string()).or_default();
+                let im = images.entry(file_name.to_string()).or_default();
                 im.file_name = file_name.clone();
                 im.image_url = format!("{DEFAULT_IMAGE_URL}/{path}");
                 im.is_video = file_name.to_lowercase().ends_with(".mp4");
+                im.date = parse_date_from_filename(&file_name);
             }
             _ => {
                 return Err((StatusCode::BAD_REQUEST, format!("Unexpected field: {name}")));
             }
         }
     }
+
+    // Sort images by date ascending, then collect into Vec
+    let mut sorted_images: Vec<_> = images.into_values().collect();
+    sorted_images.sort_by_key(|m| m.date);
+    form.images = sorted_images;
 
     if token.is_empty() || token != std::env::var("TOKEN").unwrap_or_default() {
         return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
@@ -156,7 +165,7 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
         )
     })?;
 
-    if let Some(image) = form.images.get(&form.feature.file_name) {
+    if let Some(image) = form.images.iter().find(|m| m.file_name == form.feature.file_name) {
         if image.is_video {
             info!("Featured file is a video, falling back to first available photo");
         } else {
@@ -167,18 +176,9 @@ pub async fn handle(mut multipart: Multipart) -> Result<Html<String>, (StatusCod
 
     if form.feature.image_url.is_empty() {
         info!("No featured image specified, selecting the first available photo");
-        let mut keys: Vec<_> = form
-            .images
-            .iter()
-            .filter(|(_, v)| !v.is_video)
-            .map(|(k, _)| k.clone())
-            .collect();
-        keys.sort_by_key(|k| k.to_lowercase());
-        let featured_image_key = keys.first().cloned().unwrap_or_default();
-
-        let image = form.images.get(&featured_image_key).unwrap();
-        form.feature = image.clone();
-        form.feature.file_name = featured_image_key.clone();
+        if let Some(image) = form.images.iter().find(|m| !m.is_video) {
+            form.feature = image.clone();
+        }
     }
 
     if let Err(err) = form.validate() {

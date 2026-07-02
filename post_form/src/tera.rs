@@ -1,11 +1,11 @@
+use chrono::NaiveDate;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use tera::Tera;
 
-#[derive(Clone, Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ImageMetadata {
     pub file_name: String,
     pub location: String,
@@ -15,6 +15,23 @@ pub struct ImageMetadata {
     pub caption: String,
     pub image_url: String,
     pub is_video: bool,
+    pub date: NaiveDate,
+}
+
+impl Default for ImageMetadata {
+    fn default() -> Self {
+        Self {
+            file_name: String::new(),
+            location: String::new(),
+            coordinates: String::new(),
+            description: String::new(),
+            alt_text: String::new(),
+            caption: String::new(),
+            image_url: String::new(),
+            is_video: false,
+            date: NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Default)]
@@ -24,7 +41,7 @@ pub struct UploadForm {
     pub strava: String,
     pub date: String,
     pub feature: ImageMetadata,
-    pub images: HashMap<String, ImageMetadata>,
+    pub images: Vec<ImageMetadata>,
 }
 
 impl UploadForm {
@@ -75,7 +92,7 @@ feature:
 {% if form.strava %}strava: "{{ form.strava }}"{% endif %}
 ---
 
-{% for key, metadata in form.images %}
+{% for metadata in form.images %}
 {%- if metadata.is_video %}
 <video width="640" preload="auto" controls src="{{ metadata.image_url }}" type="video/mp4">
 	Your browser does not support HTML5 video.
@@ -145,22 +162,20 @@ mod tests {
                 image_url: "https://example.com/image.jpg".to_string(),
                 ..Default::default()
             },
-            images: HashMap::from([
-                (
-                    "key1".to_string(),
-                    ImageMetadata {
-                        image_url: "https://example.com/image1.jpg".to_string(),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "key2".to_string(),
-                    ImageMetadata {
-                        image_url: "https://example.com/image2.jpg".to_string(),
-                        ..Default::default()
-                    },
-                ),
-            ]),
+            images: vec![
+                ImageMetadata {
+                    file_name: "20230101_120000.jpg".to_string(),
+                    image_url: "https://example.com/image1.jpg".to_string(),
+                    date: NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+                    ..Default::default()
+                },
+                ImageMetadata {
+                    file_name: "20230102_120000.jpg".to_string(),
+                    image_url: "https://example.com/image2.jpg".to_string(),
+                    date: NaiveDate::from_ymd_opt(2023, 1, 2).unwrap(),
+                    ..Default::default()
+                },
+            ],
         };
 
         let result = render(&upload_form);

@@ -173,7 +173,7 @@ async fn process_multipart(
         .unwrap()
 }
 
-fn parse_date_from_filename(file_name: &str) -> NaiveDate {
+pub fn parse_date_from_filename(file_name: &str) -> NaiveDate {
     let stem = file_name
         .rfind('.')
         .map(|i| &file_name[..i])
