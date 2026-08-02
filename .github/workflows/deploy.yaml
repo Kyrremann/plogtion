@@ -1,17 +1,24 @@
 name: Deploy Scaleway Functions
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
-
-env:
-  SCW_REGION: nl-ams
+  pull_request:
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace
+
   detect-changes:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.ref == 'refs/heads/main'
+    needs: check
     runs-on: ubuntu-latest
     outputs:
       image_process: ${{ steps.changes.outputs.image_process }}
@@ -32,82 +39,32 @@ jobs:
             post_form:
               - 'post_form/**'
 
-  deploy:
+  image_process:
     needs: detect-changes
-    if: |
-      needs.detect-changes.outputs.image_process == 'true' ||
-      needs.detect-changes.outputs.image_revert == 'true' ||
-      needs.detect-changes.outputs.post_form == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: image_process
-            function_id: f7881fc0-2749-430d-a38b-6ba34d84afb2
-            changed: ${{ needs.detect-changes.outputs.image_process }}
-          - name: image_revert
-            function_id: f28e8c4b-27d3-4303-860b-d74085b19842
-            changed: ${{ needs.detect-changes.outputs.image_revert }}
-          - name: post_form
-            function_id: 17e34739-4b76-4ea5-b535-bc1fda351f87
-            changed: ${{ needs.detect-changes.outputs.post_form }}
-    steps:
-      - if: matrix.changed == 'true'
-        uses: actions/checkout@v6
+    if: needs.detect-changes.outputs.image_process == 'true'
+    uses: Kyrremann/oslogigguide/.github/workflows/scaleway.yaml@main
+    with:
+      directory: image_process
+      function-id: f7881fc0-2749-430d-a38b-6ba34d84afb2
+    secrets:
+      scaleway-token: ${{ secrets.SCW_SECRET_KEY }}
 
-      - if: matrix.changed == 'true'
-        name: Create zip
-        run: |
-          cd ${{ matrix.name }}
-          zip -r ../${{ matrix.name }}.zip Cargo.lock Cargo.toml src/
+  image_revert:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.image_revert == 'true'
+    uses: Kyrremann/oslogigguide/.github/workflows/scaleway.yaml@main
+    with:
+      directory: image_revert
+      function-id: f28e8c4b-27d3-4303-860b-d74085b19842
+    secrets:
+      scaleway-token: ${{ secrets.SCW_SECRET_KEY }}
 
-      - if: matrix.changed == 'true'
-        name: Deploy to Scaleway
-        env:
-          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
-        run: |
-          set -euo pipefail
-
-          FUNCTION_ID="${{ matrix.function_id }}"
-          ZIP_FILE="${{ matrix.name }}.zip"
-          CONTENT_LENGTH=$(stat -c%s "$ZIP_FILE")
-          API_BASE="https://api.scaleway.com/functions/v1beta1/regions/${SCW_REGION}/functions/${FUNCTION_ID}"
-
-          # Get presigned upload URL
-          RESPONSE=$(curl -sS -w "\n%{http_code}" \
-            "${API_BASE}/upload-url?content_length=${CONTENT_LENGTH}" \
-            -H "X-Auth-Token: ${SCW_SECRET_KEY}")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "::error::Upload URL request failed (HTTP ${HTTP_CODE}): ${BODY}"
-            exit 1
-          fi
-
-          UPLOAD_URL=$(echo "$BODY" | jq -r '.url')
-
-          # Upload zip
-          curl -sSf -X PUT "$UPLOAD_URL" \
-            --upload-file "$ZIP_FILE" \
-            -H "Content-Type: application/octet-stream"
-
-          echo "✓ Uploaded $ZIP_FILE"
-
-          # Trigger deployment
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
-            "${API_BASE}/deploy" \
-            -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
-            -H "Content-Type: application/json")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "::error::Deploy request failed (HTTP ${HTTP_CODE}): ${BODY}"
-            exit 1
-          fi
-
-          echo "✓ Deployed ${{ matrix.name }} (status: $(echo "$BODY" | jq -r '.status'))"
+  post_form:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.post_form == 'true'
+    uses: Kyrremann/oslogigguide/.github/workflows/scaleway.yaml@main
+    with:
+      directory: post_form
+      function-id: 17e34739-4b76-4ea5-b535-bc1fda351f87
+    secrets:
+      scaleway-token: ${{ secrets.SCW_SECRET_KEY }}
