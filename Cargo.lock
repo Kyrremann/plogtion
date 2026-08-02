@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "image_process"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "chrono",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "image_revert"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "axum",
  "env_logger",
@@ -1472,13 +1472,12 @@ dependencies = [
 
 [[package]]
 name = "post_form"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "chrono",
  "env_logger",
  "git2",
- "image_process",
  "log",
  "pretty_assertions",
  "reqwest 0.13.4",

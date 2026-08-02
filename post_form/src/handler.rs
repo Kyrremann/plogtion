@@ -1,13 +1,14 @@
 mod brevo;
+mod date_parser;
 mod git;
 mod tera;
 
+use crate::date_parser::parse_date_from_filename;
 use crate::tera::UploadForm;
 use axum::extract::Multipart;
 use axum::http::StatusCode;
 use axum::response::Html;
 use chrono::{Datelike, NaiveDate};
-use image_process::parse_date_from_filename;
 use log::{error, info};
 use serde::Deserialize;
 use std::collections::HashMap;
